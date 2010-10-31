@@ -631,6 +631,11 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 		ret = recv_bcast_packet(skb, batman_if);
 		break;
 
+		/* multicast packet */
+	case BAT_MCAST:
+		ret = recv_mcast_packet(skb, batman_if);
+		break;
+
 		/* multicast tracker packet */
 	case BAT_MCAST_TRACKER:
 		ret = recv_mcast_tracker_packet(skb, batman_if);
