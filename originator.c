@@ -139,6 +139,8 @@ void orig_node_free_ref(struct kref *refcount)
 	hna_global_del_orig(orig_node->bat_priv, orig_node,
 			    "originator timed out");
 
+	kfree(orig_node->mca_buff);
+
 	kfree(orig_node->bcast_own);
 	kfree(orig_node->bcast_own_sum);
 	kfree(orig_node);
@@ -227,6 +229,8 @@ struct orig_node *get_orig_node(struct bat_priv *bat_priv, uint8_t *addr)
 	memcpy(orig_node->orig, addr, ETH_ALEN);
 	orig_node->router = NULL;
 	orig_node->hna_buff = NULL;
+	orig_node->mca_buff = NULL;
+	orig_node->num_mca = 0;
 	orig_node->bcast_seqno_reset = jiffies - 1
 					- msecs_to_jiffies(RESET_PROTECTION_MS);
 	orig_node->batman_seqno_reset = jiffies - 1
@@ -340,7 +344,8 @@ static bool purge_orig_node(struct bat_priv *bat_priv,
 			update_routes(bat_priv, orig_node,
 				      best_neigh_node,
 				      orig_node->hna_buff,
-				      orig_node->hna_buff_len);
+				      orig_node->hna_buff_len,
+				      orig_node->mca_buff, orig_node->num_mca);
 		}
 	}
 

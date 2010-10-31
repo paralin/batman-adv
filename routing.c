@@ -85,6 +85,34 @@ static void update_HNA(struct bat_priv *bat_priv, struct orig_node *orig_node,
 	}
 }
 
+/* Copy the mca buffer again if something has changed */
+static void update_MCA(struct orig_node *orig_node,
+		       unsigned char *mca_buff, int num_mca)
+{
+	/* numbers differ? then reallocate buffer */
+	if (num_mca != orig_node->num_mca) {
+		kfree(orig_node->mca_buff);
+		if (num_mca > 0) {
+			orig_node->mca_buff =
+				kmalloc(num_mca * ETH_ALEN, GFP_ATOMIC);
+			if (orig_node->mca_buff)
+				goto update;
+		}
+		orig_node->mca_buff = NULL;
+		orig_node->num_mca = 0;
+	/* size ok, just update? */
+	} else if (num_mca > 0 &&
+		 memcmp(orig_node->mca_buff, mca_buff, num_mca * ETH_ALEN))
+		goto update;
+
+	/* it's the same, leave it like that */
+	return;
+
+update:
+	memcpy(orig_node->mca_buff, mca_buff, num_mca * ETH_ALEN);
+	orig_node->num_mca = num_mca;
+}
+
 static void update_route(struct bat_priv *bat_priv,
 			 struct orig_node *orig_node,
 			 struct neigh_node *neigh_node,
@@ -129,7 +157,7 @@ static void update_route(struct bat_priv *bat_priv,
 
 void update_routes(struct bat_priv *bat_priv, struct orig_node *orig_node,
 		   struct neigh_node *neigh_node, unsigned char *hna_buff,
-		   int hna_buff_len)
+		   int hna_buff_len, unsigned char *mca_buff, int num_mca)
 {
 
 	if (!orig_node)
@@ -141,6 +169,8 @@ void update_routes(struct bat_priv *bat_priv, struct orig_node *orig_node,
 	/* may be just HNA changed */
 	else
 		update_HNA(bat_priv, orig_node, hna_buff, hna_buff_len);
+
+	update_MCA(orig_node, mca_buff, num_mca);
 }
 
 static int is_bidirectional_neigh(struct orig_node *orig_node,
@@ -376,6 +406,7 @@ static void update_orig(struct bat_priv *bat_priv,
 	struct hlist_node *node;
 	int tmp_hna_buff_len;
 	uint8_t bcast_own_sum_orig, bcast_own_sum_neigh;
+	unsigned char *mca_buff;
 
 	bat_dbg(DBG_BATMAN, bat_priv, "update_originator(): "
 		"Searching and updating originator entry of received packet\n");
@@ -435,6 +466,7 @@ static void update_orig(struct bat_priv *bat_priv,
 
 	tmp_hna_buff_len = (hna_buff_len > batman_packet->num_hna * ETH_ALEN ?
 			    batman_packet->num_hna * ETH_ALEN : hna_buff_len);
+	mca_buff = (char *)batman_packet + BAT_PACKET_LEN + tmp_hna_buff_len;
 
 	/* if this neighbor already is our next hop there is nothing
 	 * to change */
@@ -467,12 +499,14 @@ static void update_orig(struct bat_priv *bat_priv,
 	}
 
 	update_routes(bat_priv, orig_node, neigh_node,
-		      hna_buff, tmp_hna_buff_len);
+		      hna_buff, tmp_hna_buff_len, mca_buff,
+		      batman_packet->num_mca);
 	goto update_gw;
 
 update_hna:
 	update_routes(bat_priv, orig_node, orig_node->router,
-		      hna_buff, tmp_hna_buff_len);
+		      hna_buff, tmp_hna_buff_len, mca_buff,
+		      batman_packet->num_mca);
 
 update_gw:
 	if (orig_node->gw_flags != batman_packet->gw_flags)
