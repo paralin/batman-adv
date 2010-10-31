@@ -31,6 +31,7 @@
 #define BAT_VIS           0x05
 #define BAT_UNICAST_FRAG  0x06
 #define BAT_MCAST_TRACKER 0x07
+#define BAT_MCAST         0x08
 
 /* this file is included by batctl which needs these defines */
 #define COMPAT_VERSION 14
@@ -124,6 +125,14 @@ struct bcast_packet {
 	uint8_t  orig[6];
 	uint8_t  ttl;
 	uint32_t seqno;
+} __packed;
+
+struct mcast_packet {
+        uint8_t  packet_type;    /* BAT_MCAST */
+        uint8_t  version;        /* batman version field */
+        uint8_t  orig[6];
+        uint32_t seqno;
+        uint8_t  ttl;
 } __packed;
 
 /* marks the path for multicast streams */

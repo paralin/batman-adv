@@ -23,6 +23,7 @@
 #include "multicast.h"
 #include "hash.h"
 #include "send.h"
+#include "soft-interface.h"
 #include "hard-interface.h"
 #include "originator.h"
 #include "compat.h"
@@ -1137,6 +1138,170 @@ int mcast_forw_table_seq_print_text(struct seq_file *seq, void *offset)
 	spin_unlock_bh(&bat_priv->mcast_forw_table_lock);
 
 	return 0;
+}
+
+static inline void nexthops_from_if_list(struct hlist_head *mcast_if_list,
+					 struct list_head *nexthop_list,
+					 struct bat_priv *bat_priv)
+{
+	struct batman_if *batman_if;
+	struct mcast_forw_if_entry *if_entry;
+	struct mcast_forw_nexthop_entry *nexthop_entry;
+	struct hlist_node *node, *node2;
+	struct dest_entries_list *dest_entry;
+	int mcast_fanout = atomic_read(&bat_priv->mcast_fanout);
+
+	hlist_for_each_entry(if_entry, node, mcast_if_list, list) {
+		rcu_read_lock();
+		batman_if = if_num_to_batman_if(if_entry->if_num);
+		if (!batman_if) {
+			rcu_read_unlock();
+			continue;
+		}
+
+		kref_get(&batman_if->refcount);
+		rcu_read_unlock();
+
+
+		/* send via broadcast */
+		if (if_entry->num_nexthops > mcast_fanout) {
+			dest_entry = kmalloc(sizeof(struct dest_entries_list),
+					     GFP_ATOMIC);
+			memcpy(dest_entry->dest, broadcast_addr, ETH_ALEN);
+			dest_entry->batman_if = batman_if;
+			list_add(&dest_entry->list, nexthop_list);
+			continue;
+		}
+
+		/* send separate unicast packets */
+		hlist_for_each_entry(nexthop_entry, node2,
+				     &if_entry->mcast_nexthop_list, list) {
+			if (!get_remaining_timeout(nexthop_entry, bat_priv))
+				continue;
+
+			dest_entry = kmalloc(sizeof(struct dest_entries_list),
+					     GFP_ATOMIC);
+			memcpy(dest_entry->dest, nexthop_entry->neigh_addr,
+			       ETH_ALEN);
+
+			kref_get(&batman_if->refcount);
+			dest_entry->batman_if = batman_if;
+			list_add(&dest_entry->list, nexthop_list);
+		}
+		kref_put(&batman_if->refcount, hardif_free_ref);
+	}
+}
+
+static inline void nexthops_from_orig_list(uint8_t *orig,
+					   struct hlist_head *mcast_orig_list,
+					   struct list_head *nexthop_list,
+					   struct bat_priv *bat_priv)
+{
+	struct mcast_forw_orig_entry *orig_entry;
+	struct hlist_node *node;
+
+	hlist_for_each_entry(orig_entry, node, mcast_orig_list, list) {
+		if (memcmp(orig, orig_entry->orig, ETH_ALEN))
+			continue;
+
+		nexthops_from_if_list(&orig_entry->mcast_if_list, nexthop_list,
+				      bat_priv);
+		break;
+	}
+}
+
+static inline void nexthops_from_table(uint8_t *dest, uint8_t *orig,
+				       struct hlist_head *mcast_forw_table,
+				       struct list_head *nexthop_list,
+				       struct bat_priv *bat_priv)
+{
+	struct mcast_forw_table_entry *table_entry;
+	struct hlist_node *node;
+
+	hlist_for_each_entry(table_entry, node, mcast_forw_table, list) {
+		if (memcmp(dest, table_entry->mcast_addr, ETH_ALEN))
+			continue;
+
+		nexthops_from_orig_list(orig, &table_entry->mcast_orig_list,
+					nexthop_list, bat_priv);
+		break;
+	}
+}
+
+static void route_mcast_packet(struct sk_buff *skb, struct bat_priv *bat_priv)
+{
+	struct sk_buff *skb1;
+	struct mcast_packet *mcast_packet;
+	struct ethhdr *ethhdr;
+	int num_bcasts = 3, i;
+	struct list_head nexthop_list;
+	struct dest_entries_list *dest_entry, *tmp;
+
+	mcast_packet = (struct mcast_packet *)skb->data;
+	ethhdr = (struct ethhdr *)(mcast_packet + 1);
+
+	INIT_LIST_HEAD(&nexthop_list);
+
+	mcast_packet->ttl--;
+
+	spin_lock_bh(&bat_priv->mcast_forw_table_lock);
+	nexthops_from_table(ethhdr->h_dest, mcast_packet->orig,
+			    &bat_priv->mcast_forw_table, &nexthop_list,
+			    bat_priv);
+	spin_unlock_bh(&bat_priv->mcast_forw_table_lock);
+
+	list_for_each_entry_safe(dest_entry, tmp, &nexthop_list, list) {
+		if (is_broadcast_ether_addr(dest_entry->dest)) {
+			for (i = 0; i < num_bcasts; i++) {
+				skb1 = skb_clone(skb, GFP_ATOMIC);
+				send_skb_packet(skb1, dest_entry->batman_if,
+						dest_entry->dest);
+			}
+		} else {
+			skb1 = skb_clone(skb, GFP_ATOMIC);
+			send_skb_packet(skb1, dest_entry->batman_if,
+					dest_entry->dest);
+		}
+		kref_put(&dest_entry->batman_if->refcount, hardif_free_ref);
+		list_del(&dest_entry->list);
+		kfree(dest_entry);
+	}
+}
+
+int mcast_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv)
+{
+	struct mcast_packet *mcast_packet;
+
+	if (!bat_priv->primary_if)
+		goto dropped;
+
+	if (my_skb_head_push(skb, sizeof(struct mcast_packet)) < 0)
+		goto dropped;
+
+	mcast_packet = (struct mcast_packet *)skb->data;
+	mcast_packet->version = COMPAT_VERSION;
+	mcast_packet->ttl = TTL;
+
+	/* batman packet type: broadcast */
+	mcast_packet->packet_type = BAT_MCAST;
+
+	/* hw address of first interface is the orig mac because only
+	 * this mac is known throughout the mesh */
+	memcpy(mcast_packet->orig,
+	       bat_priv->primary_if->net_dev->dev_addr, ETH_ALEN);
+
+	/* set broadcast sequence number */
+	mcast_packet->seqno =
+		htonl(atomic_inc_return(&bat_priv->mcast_seqno));
+
+	route_mcast_packet(skb, bat_priv);
+
+	kfree_skb(skb);
+	return 0;
+
+dropped:
+	kfree_skb(skb);
+	return 1;
 }
 
 int mcast_init(struct bat_priv *bat_priv)
