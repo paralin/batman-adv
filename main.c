@@ -326,6 +326,9 @@ static void batadv_recv_handler_init(void)
 	batadv_rx_handler[BATADV_UNICAST_FRAG] = batadv_recv_ucast_frag_packet;
 	/* broadcast packet */
 	batadv_rx_handler[BATADV_BCAST] = batadv_recv_bcast_packet;
+	/* multicast tracker packet */
+	batadv_rx_handler[BATADV_MCAST_TRACKER] =
+					batadv_recv_mcast_tracker_packet;
 	/* vis packet */
 	batadv_rx_handler[BATADV_VIS] = batadv_recv_vis_packet;
 	/* Translation table query (request or response) */

@@ -27,6 +27,7 @@
 #include "originator.h"
 #include "vis.h"
 #include "unicast.h"
+#include "multicast.h"
 #include "bridge_loop_avoidance.h"
 #include "distributed-arp-table.h"
 
@@ -1237,6 +1238,34 @@ out:
 	if (orig_node)
 		batadv_orig_node_free_ref(orig_node);
 	return ret;
+}
+
+/**
+ * batadv_recv_mcast_tracker_packet - Incoming tracker packet handler
+ * @skb:	The incoming tracker packet
+ * @recv_if:	The interface we received the packet from
+ *
+ * Handles the evaluation and possibly forwarding of a multicast
+ * tracker packet.
+ */
+int batadv_recv_mcast_tracker_packet(struct sk_buff *skb,
+				     struct batadv_hard_iface *recv_if)
+{
+	struct batadv_priv *bat_priv = netdev_priv(recv_if->soft_iface);
+	int hdr_size = sizeof(struct batadv_mcast_tracker_packet);
+
+	/* keep skb linear */
+	if (skb_linearize(skb) < 0)
+		return NET_RX_DROP;
+
+	if (batadv_check_unicast_packet(skb, hdr_size) < 0)
+		return NET_RX_DROP;
+
+	batadv_mcast_tracker_packet_route(skb, bat_priv);
+
+	dev_kfree_skb(skb);
+
+	return NET_RX_SUCCESS;
 }
 
 int batadv_recv_vis_packet(struct sk_buff *skb,
