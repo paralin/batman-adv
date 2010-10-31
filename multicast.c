@@ -1241,7 +1241,7 @@ static inline void nexthops_from_table(uint8_t *dest, uint8_t *orig,
 	}
 }
 
-static void route_mcast_packet(struct sk_buff *skb, struct bat_priv *bat_priv)
+void route_mcast_packet(struct sk_buff *skb, struct bat_priv *bat_priv)
 {
 	struct sk_buff *skb1;
 	struct mcast_packet *mcast_packet;
