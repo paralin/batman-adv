@@ -1241,6 +1241,58 @@ out:
 }
 
 /**
+ * batadv_recv_mcast_packet - Incoming batman multicast packet handler
+ * @skb:	The incoming batman multicast packet
+ * @recv_if:	The interface we received the packet from
+ *
+ * Performs some sanity checks on the provided multicast skb first.
+ *
+ * Then strips the batman-adv multicast header and sends it out of our soft
+ * interface.
+ */
+int batadv_recv_mcast_packet(struct sk_buff *skb,
+			     struct batadv_hard_iface *recv_if)
+{
+	struct batadv_priv *bat_priv = netdev_priv(recv_if->soft_iface);
+	struct batadv_orig_node *orig_node = NULL;
+	struct batadv_mcast_packet *mcast_packet;
+	int hdr_size = sizeof(*mcast_packet);
+	int ret = NET_RX_DROP;
+
+	/* multicast data packets might be received via unicast or broadcast */
+	if (batadv_check_unicast_packet(skb, hdr_size) < 0 &&
+	    batadv_check_broadcast_packet(skb, hdr_size) < 0)
+		goto out;
+
+	mcast_packet = (struct batadv_mcast_packet *)skb->data;
+
+	/* ignore packets originated by myself */
+	if (batadv_is_my_mac(mcast_packet->orig))
+		goto out;
+
+	if (mcast_packet->header.ttl < 2)
+		goto out;
+
+	orig_node = batadv_orig_hash_find(bat_priv, mcast_packet->orig);
+
+	if (!orig_node)
+		goto out;
+
+	/* Let's always send the frame upstream. If it's not actually for us
+	 * then the kernel will drop it later, or if we have a bridge
+	 * then the bridge will handle the forwarding. */
+	batadv_interface_rx(recv_if->soft_iface, skb, recv_if,
+			    hdr_size, orig_node);
+
+	ret = NET_RX_SUCCESS;
+
+out:
+	if (orig_node)
+		batadv_orig_node_free_ref(orig_node);
+	return ret;
+}
+
+/**
  * batadv_recv_mcast_tracker_packet - Incoming tracker packet handler
  * @skb:	The incoming tracker packet
  * @recv_if:	The interface we received the packet from

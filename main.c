@@ -331,6 +331,8 @@ static void batadv_recv_handler_init(void)
 	/* multicast tracker packet */
 	batadv_rx_handler[BATADV_MCAST_TRACKER] =
 					batadv_recv_mcast_tracker_packet;
+	/* multicast packet */
+	batadv_rx_handler[BATADV_MCAST] = batadv_recv_mcast_packet;
 	/* vis packet */
 	batadv_rx_handler[BATADV_VIS] = batadv_recv_vis_packet;
 	/* Translation table query (request or response) */
