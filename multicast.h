@@ -31,6 +31,7 @@ void route_mcast_tracker_packet(struct sk_buff *tracker_packet,
 				struct bat_priv *bat_priv);
 void purge_mcast_forw_table(struct bat_priv *bat_priv);
 int mcast_forw_table_seq_print_text(struct seq_file *seq, void *offset);
+void route_mcast_packet(struct sk_buff *skb, struct bat_priv *bat_priv);
 int mcast_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv);
 int mcast_init(struct bat_priv *bat_priv);
 void mcast_free(struct bat_priv *bat_priv);
