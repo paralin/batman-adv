@@ -25,6 +25,8 @@ export CONFIG_BATMAN_ADV_DEBUG=n
 export CONFIG_BATMAN_ADV_BLA=y
 # B.A.T.M.A.N. distributed ARP table:
 export CONFIG_BATMAN_ADV_DAT=y
+# B.A.T.M.A.N. multicast optimization bridge snooping support
+export CONFIG_BATMAN_ADV_MCAST_BRIDGE_SNOOP=n
 
 PWD:=$(shell pwd)
 KERNELPATH ?= /lib/modules/$(shell uname -r)/build

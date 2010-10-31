@@ -26,6 +26,20 @@
 
 #include <linux/version.h>	/* LINUX_VERSION_CODE */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 27)
+
+/*
+ * net_device - multicast list handling
+ *	locking
+ */
+#define netif_addr_lock_bh(soft_iface) \
+		netif_tx_lock_bh(soft_iface)
+#define netif_addr_unlock_bh(soft_iface) \
+		netif_tx_unlock_bh(soft_iface)
+
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 27) */
+
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
 
 #undef __alloc_percpu
@@ -75,6 +89,24 @@
 
 #define pr_warn pr_warning
 
+#define netdev_mc_count(dev) ((dev)->mc_count)
+#undef  netdev_for_each_mc_addr
+#define netdev_for_each_mc_addr(mclist, dev) \
+	for (mclist = (struct bat_dev_addr_list *)dev->mc_list; mclist; \
+	     mclist = (struct bat_dev_addr_list *)mclist->next)
+
+/* Note, that this breaks the usage of the normal 'struct netdev_hw_addr'
+ * for kernels < 2.6.35 in batman-adv! */
+#define netdev_hw_addr bat_dev_addr_list
+struct bat_dev_addr_list {
+	struct dev_addr_list *next;
+	u8  addr[MAX_ADDR_LEN];
+	u8  da_addrlen;
+	u8  da_synced;
+	int da_users;
+	int da_gusers;
+};
+
 #endif /* < KERNEL_VERSION(2, 6, 35) */
 
 
@@ -118,6 +150,26 @@ static inline int batadv_param_set_copystring(const char *val,
 #endif /* < KERNEL_VERSION(2, 6, 36) */
 
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 38)
+
+#define IPV6_ADDR_MC_FLAG_TRANSIENT(a)  \
+	((a)->s6_addr[1] & 0x10)
+
+void batadv_for_each_pmc_rcu_init(struct in_device *in_dev,
+				  struct ip_mc_list **pmc);
+bool batadv_for_each_pmc_rcu_check(struct in_device *in_dev,
+				   struct ip_mc_list *pmc);
+
+#undef for_each_pmc_rcu
+#define for_each_pmc_rcu(in_dev, pmc)				\
+	for (batadv_for_each_pmc_rcu_init(in_dev, &pmc);	\
+	     batadv_for_each_pmc_rcu_check(in_dev, pmc);	\
+	     pmc = NULL)					\
+		for (; pmc != NULL; pmc = pmc->next)
+
+#endif /* < KERNEL_VERSION(2, 6, 38) */
+
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 39)
 
 #define kstrtoul strict_strtoul
@@ -144,6 +196,19 @@ static inline void skb_reset_mac_len(struct sk_buff *skb)
 
 #endif /* < KERNEL_VERSION(3, 0, 0) */
 
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 1, 0)
+
+#define __ARG_PLACEHOLDER_1 0,
+#define config_enabled(cfg) _config_enabled(cfg)
+#define _config_enabled(value) __config_enabled(__ARG_PLACEHOLDER_##value)
+#define __config_enabled(arg1_or_junk) ___config_enabled(arg1_or_junk 1, 0)
+#define ___config_enabled(__ignored, val, ...) val
+
+#define IS_ENABLED(module) \
+	(config_enabled(module) || config_enabled(option##_MODULE))
+
+#endif /* < KERNEL_VERSION(3, 1, 0) */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0)
 

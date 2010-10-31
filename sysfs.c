@@ -440,6 +440,7 @@ BATADV_ATTR_SIF_UINT(gw_sel_class, S_IRUGO | S_IWUSR, 1, BATADV_TQ_MAX_VALUE,
 		     batadv_post_gw_deselect);
 static BATADV_ATTR(gw_bandwidth, S_IRUGO | S_IWUSR, batadv_show_gw_bwidth,
 		   batadv_store_gw_bwidth);
+BATADV_ATTR_SIF_BOOL(mcast_group_awareness, S_IRUGO | S_IWUSR, NULL);
 #ifdef CONFIG_BATMAN_ADV_DEBUG
 BATADV_ATTR_SIF_UINT(log_level, S_IRUGO | S_IWUSR, 0, BATADV_DBG_ALL, NULL);
 #endif
@@ -463,6 +464,7 @@ static struct batadv_attribute *batadv_mesh_attrs[] = {
 	&batadv_attr_num_bcasts,
 	&batadv_attr_gw_sel_class,
 	&batadv_attr_gw_bandwidth,
+	&batadv_attr_mcast_group_awareness,
 #ifdef CONFIG_BATMAN_ADV_DEBUG
 	&batadv_attr_log_level,
 #endif

@@ -27,6 +27,7 @@
 #include "hard-interface.h"
 #include "send.h"
 #include "bat_algo.h"
+#include "multicast.h"
 
 static struct batadv_neigh_node *
 batadv_iv_ogm_neigh_new(struct batadv_hard_iface *hard_iface,
@@ -80,6 +81,8 @@ static int batadv_iv_ogm_iface_enable(struct batadv_hard_iface *hard_iface)
 	batadv_ogm_packet->tq = BATADV_TQ_MAX_VALUE;
 	batadv_ogm_packet->tt_num_changes = 0;
 	batadv_ogm_packet->ttvn = 0;
+	batadv_ogm_packet->mcast_num_mla = 0;
+	batadv_ogm_packet->reserved = 0;
 
 	res = 0;
 
@@ -149,12 +152,14 @@ static uint8_t batadv_hop_penalty(uint8_t tq,
 
 /* is there another aggregated packet here? */
 static int batadv_iv_ogm_aggr_packet(int buff_pos, int packet_len,
-				     int tt_num_changes)
+				     int tt_num_changes,
+				     int mcast_num_mla)
 {
 	int next_buff_pos = 0;
 
 	next_buff_pos += buff_pos + BATADV_OGM_HLEN;
 	next_buff_pos += batadv_tt_len(tt_num_changes);
+	next_buff_pos += batadv_mcast_mla_len(mcast_num_mla);
 
 	return (next_buff_pos <= packet_len) &&
 	       (next_buff_pos <= BATADV_MAX_AGGREGATION_BYTES);
@@ -182,7 +187,8 @@ static void batadv_iv_ogm_send_to_if(struct batadv_forw_packet *forw_packet,
 
 	/* adjust all flags and log packets */
 	while (batadv_iv_ogm_aggr_packet(buff_pos, forw_packet->packet_len,
-					 batadv_ogm_packet->tt_num_changes)) {
+					 batadv_ogm_packet->tt_num_changes,
+					 batadv_ogm_packet->mcast_num_mla)) {
 
 		/* we might have aggregated direct link packets with an
 		 * ordinary base packet
@@ -211,6 +217,8 @@ static void batadv_iv_ogm_send_to_if(struct batadv_forw_packet *forw_packet,
 
 		buff_pos += BATADV_OGM_HLEN;
 		buff_pos += batadv_tt_len(batadv_ogm_packet->tt_num_changes);
+		buff_pos += batadv_mcast_mla_len(
+					batadv_ogm_packet->mcast_num_mla);
 		packet_num++;
 		packet_pos = forw_packet->skb->data + buff_pos;
 		batadv_ogm_packet = (struct batadv_ogm_packet *)packet_pos;
@@ -549,6 +557,7 @@ static void batadv_iv_ogm_forward(struct batadv_orig_node *orig_node,
 {
 	struct batadv_priv *bat_priv = netdev_priv(if_incoming->soft_iface);
 	uint8_t tt_num_changes;
+	uint8_t mcast_num_mla;
 
 	if (batadv_ogm_packet->header.ttl <= 1) {
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv, "ttl exceeded\n");
@@ -569,6 +578,7 @@ static void batadv_iv_ogm_forward(struct batadv_orig_node *orig_node,
 	}
 
 	tt_num_changes = batadv_ogm_packet->tt_num_changes;
+	mcast_num_mla = batadv_ogm_packet->mcast_num_mla;
 
 	batadv_ogm_packet->header.ttl--;
 	memcpy(batadv_ogm_packet->prev_sender, ethhdr->h_source, ETH_ALEN);
@@ -589,7 +599,8 @@ static void batadv_iv_ogm_forward(struct batadv_orig_node *orig_node,
 		batadv_ogm_packet->flags &= ~BATADV_DIRECTLINK;
 
 	batadv_iv_ogm_queue_add(bat_priv, (unsigned char *)batadv_ogm_packet,
-				BATADV_OGM_HLEN + batadv_tt_len(tt_num_changes),
+				BATADV_OGM_HLEN + batadv_tt_len(tt_num_changes)
+				+ batadv_mcast_mla_len(mcast_num_mla),
 				if_incoming, 0, batadv_iv_ogm_fwd_send_time());
 }
 
@@ -600,7 +611,7 @@ static void batadv_iv_ogm_schedule(struct batadv_hard_iface *hard_iface)
 	struct batadv_ogm_packet *batadv_ogm_packet;
 	struct batadv_hard_iface *primary_if;
 	int *ogm_buff_len = &hard_iface->bat_iv.ogm_buff_len;
-	int vis_server, tt_num_changes = 0;
+	int vis_server, tt_num_changes = 0, mcast_num_mla = 0, mla_offset;
 	uint32_t seqno;
 	uint8_t bandwidth;
 
@@ -623,6 +634,20 @@ static void batadv_iv_ogm_schedule(struct batadv_hard_iface *hard_iface)
 	batadv_ogm_packet->tt_crc = htons(bat_priv->tt.local_crc);
 	if (tt_num_changes >= 0)
 		batadv_ogm_packet->tt_num_changes = tt_num_changes;
+
+	if (hard_iface == primary_if) {
+		mla_offset = BATADV_OGM_HLEN +
+			     batadv_tt_len(batadv_ogm_packet->tt_num_changes);
+		mcast_num_mla = max(0, batadv_mcast_mla_append(
+						hard_iface->soft_iface,
+						ogm_buff,
+						ogm_buff_len,
+						mla_offset));
+		batadv_ogm_packet =
+			(struct batadv_ogm_packet *)(*ogm_buff);
+	}
+
+	batadv_ogm_packet->mcast_num_mla = mcast_num_mla;
 
 	if (vis_server == BATADV_VIS_TYPE_SERVER_SYNC)
 		batadv_ogm_packet->flags |= BATADV_VIS_SERVER;
@@ -1306,11 +1331,14 @@ static int batadv_iv_ogm_receive(struct sk_buff *skb,
 
 		buff_pos += BATADV_OGM_HLEN;
 		buff_pos += batadv_tt_len(batadv_ogm_packet->tt_num_changes);
+		buff_pos += batadv_mcast_mla_len(
+					batadv_ogm_packet->mcast_num_mla);
 
 		packet_pos = packet_buff + buff_pos;
 		batadv_ogm_packet = (struct batadv_ogm_packet *)packet_pos;
 	} while (batadv_iv_ogm_aggr_packet(buff_pos, packet_len,
-					   batadv_ogm_packet->tt_num_changes));
+					   batadv_ogm_packet->tt_num_changes,
+					   batadv_ogm_packet->mcast_num_mla));
 
 	kfree_skb(skb);
 	return NET_RX_SUCCESS;

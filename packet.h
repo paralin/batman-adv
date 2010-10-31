@@ -47,7 +47,7 @@ enum batadv_subtype {
 };
 
 /* this file is included by batctl which needs these defines */
-#define BATADV_COMPAT_VERSION 14
+#define BATADV_COMPAT_VERSION 15
 
 enum batadv_iv_flags {
 	BATADV_NOT_BEST_NEXT_HOP   = BIT(3),
@@ -141,6 +141,8 @@ struct batadv_ogm_packet {
 	uint8_t  tt_num_changes;
 	uint8_t  ttvn; /* translation table version number */
 	__be16   tt_crc;
+	uint8_t  mcast_num_mla;
+	uint8_t  reserved;
 } __packed;
 
 #define BATADV_OGM_HLEN sizeof(struct batadv_ogm_packet)

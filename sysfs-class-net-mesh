@@ -99,3 +99,10 @@ Description:
 		Defines the number of broadcasts used to forward
 		a multicast (including broadcast) payload frame on an
 		interface.
+
+What:           /sys/class/net/<mesh_iface>/mesh/mcast_group_awareness
+Date:           Sep 2012
+Contact:        Linus Lüssing <linus.luessing@web.de>
+Description:
+		Indicates whether the multicast group aware optimizations
+		for multicast IP payload data is enabled.

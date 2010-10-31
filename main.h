@@ -134,6 +134,14 @@ enum batadv_uev_type {
 /* Append 'batman-adv: ' before kernel messages */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#define UINT8_MAX 255
+
+/* identical to the one used in net/ipv4/igmp.c */
+#define for_each_pmc_rcu(in_dev, pmc)				\
+	for (pmc = rcu_dereference(in_dev->mc_list);		\
+	     pmc != NULL;					\
+	     pmc = rcu_dereference(pmc->next_rcu))
+
 /* Kernel headers */
 
 #include <linux/mutex.h>	/* mutex */
@@ -141,6 +149,7 @@ enum batadv_uev_type {
 #include <linux/netdevice.h>	/* netdevice */
 #include <linux/etherdevice.h>  /* ethernet address classification */
 #include <linux/if_ether.h>	/* ethernet header */
+#include <linux/if_bridge.h>	/* br_ip(_list) container, bridge snooping */
 #include <linux/poll.h>		/* poll_table */
 #include <linux/kthread.h>	/* kernel threads */
 #include <linux/pkt_sched.h>	/* schedule types */
@@ -148,8 +157,13 @@ enum batadv_uev_type {
 #include <linux/percpu.h>
 #include <linux/slab.h>
 #include <net/sock.h>		/* struct sock */
+#include <net/addrconf.h>	/* ipv6 address stuff */
+#include <net/ipv6.h>		/* IPV6_ADDR_MC_FLAG_TRANSIENT */
+#include <net/ip.h>		/* ip_eth_mc_map() */
+#include <linux/igmp.h>		/* ip_mc_list */
 #include <linux/jiffies.h>
 #include <linux/seq_file.h>
+#include <linux/inetdevice.h>	/* __in_dev_get_rcu */
 #include "compat.h"
 
 #include "types.h"

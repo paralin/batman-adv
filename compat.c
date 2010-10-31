@@ -25,6 +25,27 @@
 #include <linux/version.h>
 #include "main.h"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 38)
+
+void batadv_for_each_pmc_rcu_init(struct in_device *in_dev,
+				  struct ip_mc_list **pmc)
+{
+	read_lock(&in_dev->mc_list_lock);
+	*pmc = in_dev->mc_list;
+}
+
+bool batadv_for_each_pmc_rcu_check(struct in_device *in_dev,
+				   struct ip_mc_list *pmc)
+{
+	if (pmc == NULL)
+		read_unlock(&in_dev->mc_list_lock);
+
+	return (pmc != NULL);
+}
+
+#endif /* < KERNEL_VERSION(2, 6, 38) */
+
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
 
 void batadv_free_rcu_gw_node(struct rcu_head *rcu)
