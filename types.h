@@ -158,6 +158,7 @@ struct bat_priv {
 	struct hlist_head forw_bcast_list;
 	struct hlist_head gw_list;
 	struct list_head vis_send_list;
+	struct list_head mcast_forw_table;
 	struct hashtable_t *orig_hash;
 	struct hashtable_t *hna_local_hash;
 	struct hashtable_t *hna_global_hash;
@@ -170,6 +171,7 @@ struct bat_priv {
 	spinlock_t vis_hash_lock; /* protects vis_hash */
 	spinlock_t vis_list_lock; /* protects vis_info::recv_list */
 	spinlock_t softif_neigh_lock; /* protects soft-interface neigh list */
+	spinlock_t mcast_forw_table_lock; /* protects mcast_forw_table */
 	int16_t num_local_hna;
 	atomic_t hna_local_changed;
 	struct delayed_work hna_work;
