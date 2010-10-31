@@ -97,6 +97,8 @@
  *  Vis
  */
 
+#define UINT8_MAX 255
+
 /*
  * Kernel headers
  */
@@ -112,8 +114,13 @@
 #include <linux/workqueue.h>	/* workqueue */
 #include <linux/slab.h>
 #include <net/sock.h>		/* struct sock */
+#include <net/addrconf.h>	/* ipv6 address stuff */
+#include <net/ipv6.h>		/* IPV6_ADDR_MC_FLAG_TRANSIENT */
+#include <net/ip.h>		/* ip_eth_mc_map() */
+#include <linux/igmp.h>		/* ip_mc_list */
 #include <linux/jiffies.h>
 #include <linux/seq_file.h>
+#include <linux/inetdevice.h>	/* __in_dev_get_rcu */
 #include "compat.h"
 
 #include "types.h"

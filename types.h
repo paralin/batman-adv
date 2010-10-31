@@ -142,6 +142,7 @@ struct bat_priv {
 	atomic_t orig_interval;		/* uint */
 	atomic_t hop_penalty;		/* uint */
 	atomic_t num_bcasts;		/* uint */
+	atomic_t mcast_group_awareness;	/* boolean */
 	atomic_t log_level;		/* uint */
 	atomic_t bcast_seqno;
 	atomic_t bcast_queue_left;
