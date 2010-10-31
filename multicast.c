@@ -898,6 +898,76 @@ out:
 	rcu_read_unlock();
 }
 
+static void purge_mcast_nexthop_list(struct list_head *mcast_nexthop_list,
+				     int *num_nexthops,
+				     struct bat_priv *bat_priv)
+{
+	struct mcast_forw_nexthop_entry *nexthop_entry, *tmp_nexthop_entry;
+
+	list_for_each_entry_safe(nexthop_entry, tmp_nexthop_entry,
+				 mcast_nexthop_list, list) {
+		if (get_remaining_timeout(nexthop_entry, bat_priv))
+			continue;
+
+		list_del(&nexthop_entry->list);
+		kfree(nexthop_entry);
+		*num_nexthops = *num_nexthops - 1;
+	}
+}
+
+static void purge_mcast_if_list(struct list_head *mcast_if_list,
+				struct bat_priv *bat_priv)
+{
+	struct mcast_forw_if_entry *if_entry, *tmp_if_entry;
+
+	list_for_each_entry_safe(if_entry, tmp_if_entry, mcast_if_list, list) {
+		purge_mcast_nexthop_list(&if_entry->mcast_nexthop_list,
+					 &if_entry->num_nexthops,
+					 bat_priv);
+
+		if (!list_empty(&if_entry->mcast_nexthop_list))
+				continue;
+
+		list_del(&if_entry->list);
+		kfree(if_entry);
+	}
+}
+
+static void purge_mcast_orig_list(struct list_head *mcast_orig_list,
+				  struct bat_priv *bat_priv)
+{
+	struct mcast_forw_orig_entry *orig_entry, *tmp_orig_entry;
+
+	list_for_each_entry_safe(orig_entry, tmp_orig_entry, mcast_orig_list,
+				 list) {
+		purge_mcast_if_list(&orig_entry->mcast_if_list, bat_priv);
+
+		if (!list_empty(&orig_entry->mcast_if_list))
+			continue;
+
+		list_del(&orig_entry->list);
+		kfree(orig_entry);
+	}
+}
+
+void purge_mcast_forw_table(struct bat_priv *bat_priv)
+{
+	struct mcast_forw_table_entry *table_entry, *tmp_table_entry;
+
+	spin_lock_bh(&bat_priv->mcast_forw_table_lock);
+	list_for_each_entry_safe(table_entry, tmp_table_entry,
+				 &bat_priv->mcast_forw_table, list) {
+		purge_mcast_orig_list(&table_entry->mcast_orig_list, bat_priv);
+
+		if (!list_empty(&table_entry->mcast_orig_list))
+			continue;
+
+		list_del(&table_entry->list);
+		kfree(table_entry);
+	}
+	spin_unlock_bh(&bat_priv->mcast_forw_table_lock);
+}
+
 static void mcast_tracker_timer(struct work_struct *work)
 {
 	struct bat_priv *bat_priv = container_of(work, struct bat_priv,
