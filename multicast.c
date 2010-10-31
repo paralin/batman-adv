@@ -366,17 +366,38 @@ free:
 	return 1;
 }
 
-/* Collect nexthops for all dest entries specified in this tracker packet */
+/* Collect nexthops for all dest entries specified in this tracker packet.
+ * It also reduces the number of elements in the tracker packet if they exceed
+ * the buffers length (e.g. because of a received, broken tracker packet) to
+ * avoid writing in unallocated memory. */
 static int tracker_next_hops(struct mcast_tracker_packet *tracker_packet,
+			     int tracker_packet_len,
 			     struct dest_entries_list *next_hops,
 			     struct bat_priv *bat_priv)
 {
 	int num_next_hops = 0, ret;
 	struct tracker_packet_state state;
+	uint8_t *tail = (uint8_t *)tracker_packet + tracker_packet_len;
 
 	INIT_LIST_HEAD(&next_hops->list);
 
 	tracker_packet_for_each_dest(&state, tracker_packet) {
+		/* avoid writing outside of unallocated memory later */
+		if (state.dest_entry + ETH_ALEN > tail) {
+			bat_dbg(DBG_BATMAN, bat_priv,
+				"mcast tracker packet is broken, too many "
+				"entries claimed for its length, repairing");
+
+			tracker_packet->num_mcast_entries = state.mcast_num;
+
+			if (state.dest_num) {
+				tracker_packet->num_mcast_entries++;
+				state.mcast_entry->num_dest = state.dest_num;
+			}
+
+			break;
+		}
+
 		ret = add_router_of_dest(next_hops, state.dest_entry,
 					 bat_priv);
 		if (!ret)
@@ -528,8 +549,8 @@ void route_mcast_tracker_packet(
 	int *tracker_packet_lengths;
 
 	rcu_read_lock();
-	num_next_hops = tracker_next_hops(tracker_packet, &next_hops,
-					  bat_priv);
+	num_next_hops = tracker_next_hops(tracker_packet, tracker_packet_len,
+					  &next_hops, bat_priv);
 	if (!num_next_hops)
 		goto out;
 	next_hop_tracker_packets = kmalloc(tracker_packet_len * num_next_hops,
