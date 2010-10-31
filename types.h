@@ -72,6 +72,7 @@ struct orig_node {
 	uint8_t *bcast_own_sum;
 	unsigned long last_valid;
 	unsigned long bcast_seqno_reset;
+	unsigned long mcast_seqno_reset;
 	unsigned long batman_seqno_reset;
 	uint8_t gw_flags;
 	uint8_t flags;
@@ -82,7 +83,9 @@ struct orig_node {
 	uint32_t last_real_seqno;
 	uint8_t last_ttl;
 	unsigned long bcast_bits[NUM_WORDS];
+	unsigned long mcast_bits[NUM_WORDS];
 	uint32_t last_bcast_seqno;
+	uint32_t last_mcast_seqno;
 	struct hlist_head neigh_list;
 	struct list_head frag_list;
 	spinlock_t neigh_list_lock; /* protects neigh_list and router */
@@ -97,6 +100,8 @@ struct orig_node {
 	spinlock_t bcast_seqno_lock; /* protects bcast_bits,
 				      *	 last_bcast_seqno */
 	spinlock_t mca_lock; /* protects mca_buff, num_mca */
+	spinlock_t mcast_seqno_lock; /* protects mcast_bits,
+				      *	 last_mcast_seqno */
 	atomic_t bond_candidates;
 	struct list_head bond_list;
 };
