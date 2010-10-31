@@ -500,6 +500,7 @@ struct net_device *batadv_softif_create(const char *name)
 	atomic_set(&bat_priv->mcast_threshold_interval, 5000);
 	atomic_set(&bat_priv->mcast_grace_period, 25);
 	atomic_set(&bat_priv->mcast_tracker_interval, 500);
+	atomic_set(&bat_priv->mcast_forw_timeout, 2500);
 	atomic_set(&bat_priv->log_level, 0);
 	atomic_set(&bat_priv->fragmentation, 1);
 	atomic_set(&bat_priv->bcast_queue_left, BATADV_BCAST_QUEUE_LEN);

@@ -398,6 +398,7 @@ static void batadv_purge_orig(struct work_struct *work)
 
 	delayed_work = container_of(work, struct delayed_work, work);
 	bat_priv = container_of(delayed_work, struct batadv_priv, orig_work);
+	batadv_mcast_forw_table_purge(bat_priv);
 	_batadv_purge_orig(bat_priv);
 	batadv_start_purge_timer(bat_priv);
 }

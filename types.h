@@ -270,7 +270,9 @@ struct batadv_priv_dat {
 
 struct batadv_priv_mcast {
 	struct hlist_head flow_table;
+	struct hlist_head forw_table;
 	spinlock_t flow_table_lock; /* protects mcast_flow_table */
+	spinlock_t forw_table_lock; /* protects mcast_forw_table */
 	struct delayed_work tracker_work;
 };
 
@@ -298,6 +300,7 @@ struct batadv_priv {
 	atomic_t mcast_threshold_interval; /* uint */
 	atomic_t mcast_grace_period;	/* uint */
 	atomic_t mcast_tracker_interval;/* uint */
+	atomic_t mcast_forw_timeout;	/* uint */
 	atomic_t log_level;		/* uint */
 	atomic_t bcast_seqno;
 	atomic_t bcast_queue_left;

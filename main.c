@@ -99,6 +99,7 @@ int batadv_mesh_init(struct net_device *soft_iface)
 	spin_lock_init(&bat_priv->forw_bat_list_lock);
 	spin_lock_init(&bat_priv->forw_bcast_list_lock);
 	spin_lock_init(&bat_priv->mcast.flow_table_lock);
+	spin_lock_init(&bat_priv->mcast.forw_table_lock);
 	spin_lock_init(&bat_priv->tt.changes_list_lock);
 	spin_lock_init(&bat_priv->tt.req_list_lock);
 	spin_lock_init(&bat_priv->tt.roam_list_lock);
@@ -110,6 +111,7 @@ int batadv_mesh_init(struct net_device *soft_iface)
 	INIT_HLIST_HEAD(&bat_priv->forw_bat_list);
 	INIT_HLIST_HEAD(&bat_priv->forw_bcast_list);
 	INIT_HLIST_HEAD(&bat_priv->mcast.flow_table);
+	INIT_HLIST_HEAD(&bat_priv->mcast.forw_table);
 	INIT_HLIST_HEAD(&bat_priv->gw.list);
 	INIT_LIST_HEAD(&bat_priv->tt.changes_list);
 	INIT_LIST_HEAD(&bat_priv->tt.req_list);

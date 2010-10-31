@@ -49,6 +49,40 @@ bool batadv_for_each_pmc_rcu_check(struct in_device *in_dev,
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
 
+/* copy from multicast_forw.c */
+struct batadv_mcast_forw_nexthop_entry {
+	struct hlist_node list;
+	uint8_t neigh_addr[ETH_ALEN];
+	unsigned long timeout;	/* old jiffies value */
+	struct rcu_head rcu;
+};
+
+/* copy from multicast_forw.c */
+struct batadv_mcast_forw_if_entry {
+	struct hlist_node list;
+	int16_t if_num;
+	int num_nexthops;
+	struct hlist_head mcast_nexthop_list;
+	struct rcu_head rcu;
+};
+
+/* copy from multicast_forw.c */
+struct batadv_mcast_forw_orig_entry {
+	struct hlist_node list;
+	uint8_t orig[ETH_ALEN];
+	struct hlist_head mcast_if_list;
+	struct rcu_head rcu;
+};
+
+/* copy from multicast_forw.c */
+struct batadv_mcast_forw_table_entry {
+	struct hlist_node list;
+	uint8_t mcast_addr[ETH_ALEN];
+	struct hlist_head mcast_orig_list;
+	struct rcu_head rcu;
+};
+
+
 void batadv_free_rcu_gw_node(struct rcu_head *rcu)
 {
 	struct batadv_gw_node *gw_node;
@@ -108,6 +142,66 @@ void batadv_free_rcu_flow_entry(struct rcu_head *rcu)
 
 	flow_entry = container_of(rcu, struct batadv_mcast_flow_entry, rcu);
 	kfree(flow_entry);
+}
+
+/**
+ * batadv_free_rcu_nexthop_entry - Frees a multicast table nexthop entry
+ * @rcu:	The RCU context of the nexthop entry to free
+ *
+ * Frees the nexthop entry which holds the specfied RCU structure.
+ */
+void batadv_free_rcu_nexthop_entry(struct rcu_head *rcu)
+{
+	struct batadv_mcast_forw_nexthop_entry *nexthop_entry;
+
+	nexthop_entry = container_of(rcu,
+				     struct batadv_mcast_forw_nexthop_entry,
+				     rcu);
+	kfree(nexthop_entry);
+}
+
+/**
+ * batadv_free_rcu_if_entry - Frees a multicast table interface entry
+ * @rcu:	The RCU context of the interface entry to free
+ *
+ * Frees the interface entry which holds the specfied RCU structure.
+ */
+void batadv_free_rcu_if_entry(struct rcu_head *rcu)
+{
+	struct batadv_mcast_forw_if_entry *if_entry;
+
+	if_entry = container_of(rcu, struct batadv_mcast_forw_if_entry, rcu);
+	kfree(if_entry);
+}
+
+/**
+ * batadv_free_rcu_orig_entry - Frees a multicast table originator entry
+ * @rcu:	The RCU context of the originator entry to free
+ *
+ * Frees the originator entry which holds the specfied RCU structure.
+ */
+void batadv_free_rcu_orig_entry(struct rcu_head *rcu)
+{
+	struct batadv_mcast_forw_orig_entry *orig_entry;
+
+	orig_entry = container_of(rcu, struct batadv_mcast_forw_orig_entry,
+				  rcu);
+	kfree(orig_entry);
+}
+
+/**
+ * batadv_free_rcu_table_entry - Frees a multicast table entry
+ * @rcu:	The RCU context of the nexthop entry to free
+ *
+ * Frees the multicast table entry which holds the specfied RCU structure.
+ */
+void batadv_free_rcu_table_entry(struct rcu_head *rcu)
+{
+	struct batadv_mcast_forw_table_entry *table_entry;
+
+	table_entry = container_of(rcu, struct batadv_mcast_forw_table_entry,
+				   rcu);
+	kfree(table_entry);
 }
 
 #endif /* < KERNEL_VERSION(3, 0, 0) */

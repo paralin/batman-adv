@@ -29,6 +29,7 @@
 
 #include "main.h"
 #include "multicast_flow.h"
+#include "multicast_forw.h"
 #include "hash.h"
 #include "originator.h"
 #include "hard-interface.h"
@@ -602,6 +603,7 @@ static struct sk_buff *batadv_mcast_periodic_tracker_prepare(
  * batadv_mcast_add_router_of_dest - Adds the next hop for a destination
  * @next_hops:		The list to add a new next hop to
  * @dest:		The destination to find the next hop for
+ * @forw_if_list:	The routing table interface list to add to
  * @bat_priv:		bat_priv context for this mesh network
  *
  * Adds the router for the destination address to the next_hop list and its
@@ -611,11 +613,13 @@ static struct sk_buff *batadv_mcast_periodic_tracker_prepare(
 static int batadv_mcast_add_router_of_dest(
 				struct batadv_dest_entries_list *next_hops,
 				const uint8_t *dest,
+				struct hlist_head *forw_if_list,
 				struct batadv_priv *bat_priv)
 {
 	struct batadv_dest_entries_list *next_hop_tmp, *next_hop_entry;
 	struct batadv_orig_node *orig_node = NULL;
 	struct batadv_neigh_node *router = NULL;
+	int16_t if_num;
 	int ret = 1;
 
 	next_hop_entry = kmalloc(sizeof(struct batadv_dest_entries_list),
@@ -638,9 +642,14 @@ static int batadv_mcast_add_router_of_dest(
 		goto free;
 	}
 	next_hop_entry->hard_iface = router->if_incoming;
+	if_num = next_hop_entry->hard_iface->if_num;
 	rcu_read_unlock();
 
 	memcpy(next_hop_entry->dest, router->addr, ETH_ALEN);
+
+	if (forw_if_list)
+		batadv_mcast_forw_if_entry_prep(forw_if_list, if_num,
+						next_hop_entry->dest);
 
 	list_for_each_entry(next_hop_tmp, &next_hops->list, list)
 		if (!memcmp(next_hop_tmp->dest, next_hop_entry->dest,
@@ -669,6 +678,7 @@ out:
  * @tracker_packet:	The tracker packet we want to examine
  * @tracker_packet_len:	Size of the tracker packet
  * @next_hops:		The list to add any found next hops to
+ * @forw_table:		A table for updating the multicast routing table
  * @bat_priv:		bat_priv for the mesh we are preparing this packet for
  *
  * Collects nexthops for all dest entries specified in this tracker packet
@@ -677,18 +687,24 @@ out:
  * It also decrements/"repairs" the fields for the number of elements in the
  * tracker packet if they do not match the actual length of this tracker
  * packet (e.g. because of a received, broken tracker packet).
+ *
+ * It also collects information from the tracker packet needed for updating our
+ * own multicast routing table in the specified forw_table.
  */
 static int batadv_mcast_tracker_next_hops(
 			struct batadv_mcast_tracker_packet *tracker_packet,
 			int tracker_packet_len,
 			struct batadv_dest_entries_list *next_hops,
+			struct hlist_head *forw_table,
 			struct batadv_priv *bat_priv)
 {
 	int num_next_hops = 0, ret;
 	struct batadv_tracker_packet_state state;
 	uint8_t *tail = (uint8_t *)tracker_packet + tracker_packet_len;
+	struct hlist_head *forw_table_if = NULL;
 
 	INIT_LIST_HEAD(&next_hops->list);
+	INIT_HLIST_HEAD(forw_table);
 
 	batadv_tracker_packet_for_each_dest(&state, tracker_packet) {
 		/* avoid writing outside of unallocated memory later */
@@ -708,8 +724,18 @@ static int batadv_mcast_tracker_next_hops(
 			break;
 		}
 
+		if (state.dest_num)
+			goto skip;
+
+		forw_table_if = batadv_mcast_forw_table_entry_prep(
+						forw_table,
+						state.mcast_entry->mcast_addr,
+						tracker_packet->orig);
+skip:
+
 		ret = batadv_mcast_add_router_of_dest(next_hops,
 						      state.dest_entry,
+						      forw_table_if,
 						      bat_priv);
 		if (!ret)
 			num_next_hops++;
@@ -864,20 +890,26 @@ static int batadv_mcast_tracker_dec_ttl(
  *
  * It then sends those new tracker packets, this partition of the original
  * tracker packet, to their according next hop each.
+ *
+ * Finally it also updates its own multicast routing table with the
+ * information gained from incoming tracker packet.
  */
 void batadv_mcast_tracker_packet_route(struct sk_buff *skb,
 				       struct batadv_priv *bat_priv)
 {
 	struct batadv_dest_entries_list next_hops, *tmp;
 	struct batadv_dest_entries_list *next_hop;
+	struct hlist_head forw_table;
 	struct sk_buff *skb_tmp;
 	int num_next_hops;
 
 	num_next_hops = batadv_mcast_tracker_next_hops(
 				(struct batadv_mcast_tracker_packet *)skb->data,
-				skb->len, &next_hops, bat_priv);
+				skb->len, &next_hops, &forw_table, bat_priv);
 	if (!num_next_hops)
 		return;
+
+	batadv_mcast_forw_table_update(&forw_table, bat_priv);
 
 	if (!batadv_mcast_tracker_dec_ttl(
 			(struct batadv_mcast_tracker_packet *)skb->data))

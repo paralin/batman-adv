@@ -136,3 +136,11 @@ Contact:        Linus Lüssing <linus.luessing@web.de>
 Description:
 		Defines the interval in milliseconds in which batman sends
 		its multicast tracker packets.
+
+What:           /sys/class/net/<mesh_iface>/mesh/mcast_forw_timeout
+Date:           Sep 2012
+Contact:        Linus Lüssing <linus.luessing@web.de>
+Description:
+		Defines the timeout in milliseconds after which to purge
+		a multicast route which was not updated via a new tracker
+		packet yet.
