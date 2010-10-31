@@ -30,6 +30,12 @@ static int hna_len(struct batman_packet *batman_packet)
 	return batman_packet->num_hna * ETH_ALEN;
 }
 
+/* calculate the size of the mca information for a given packet */
+static int mca_len(struct batman_packet *batman_packet)
+{
+	return batman_packet->num_mca * ETH_ALEN;
+}
+
 /* return true if new_packet can be aggregated with forw_packet */
 static bool can_aggregate_with(struct batman_packet *new_batman_packet,
 			       int packet_len,
@@ -265,9 +271,11 @@ void receive_aggr_bat_packet(struct ethhdr *ethhdr, unsigned char *packet_buff,
 				   hna_buff, hna_len(batman_packet),
 				   if_incoming);
 
-		buff_pos += BAT_PACKET_LEN + hna_len(batman_packet);
+		buff_pos += BAT_PACKET_LEN + hna_len(batman_packet) +
+			    mca_len(batman_packet);
 		batman_packet = (struct batman_packet *)
 			(packet_buff + buff_pos);
 	} while (aggregated_packet(buff_pos, packet_len,
-				   batman_packet->num_hna));
+				   batman_packet->num_hna,
+				   batman_packet->num_mca));
 }

@@ -122,7 +122,8 @@ static void send_packet_to_if(struct forw_packet *forw_packet,
 	/* adjust all flags and log packets */
 	while (aggregated_packet(buff_pos,
 				 forw_packet->packet_len,
-				 batman_packet->num_hna)) {
+				 batman_packet->num_hna,
+				 batman_packet->num_mca)) {
 
 		/* we might have aggregated direct link packets with an
 		 * ordinary base packet */
@@ -214,18 +215,69 @@ static void send_packet(struct forw_packet *forw_packet)
 	rcu_read_unlock();
 }
 
+static void add_own_MCA(struct batman_packet *batman_packet, int num_mca,
+		       struct net_device *soft_iface)
+{
+	MC_LIST *mc_list_entry;
+	int num_mca_done = 0;
+	char *mca_entry = (char *)(batman_packet + 1);
+
+	if (num_mca == 0)
+		goto out;
+
+	if (num_mca > UINT8_MAX) {
+		pr_warning("Too many multicast announcements here, "
+			   "just adding %i\n", UINT8_MAX);
+		num_mca = UINT8_MAX;
+	}
+
+	mca_entry = mca_entry + batman_packet->num_hna * ETH_ALEN;
+
+	netif_addr_lock_bh(soft_iface);
+	netdev_for_each_mc_addr(mc_list_entry, soft_iface) {
+		memcpy(mca_entry, &mc_list_entry->MC_LIST_ADDR, ETH_ALEN);
+		mca_entry += ETH_ALEN;
+
+		/* A multicast address might just have been added,
+		 * avoid writing outside of buffer */
+		if (++num_mca_done == num_mca)
+			break;
+	}
+	netif_addr_unlock_bh(soft_iface);
+
+out:
+	batman_packet->num_mca = num_mca_done;
+}
+
 static void rebuild_batman_packet(struct bat_priv *bat_priv,
 				  struct batman_if *batman_if)
 {
-	int new_len;
-	unsigned char *new_buff;
+	int new_len, mcast_mode, num_mca = 0;
+	unsigned char *new_buff = NULL;
 	struct batman_packet *batman_packet;
 
-	new_len = sizeof(struct batman_packet) +
-			(bat_priv->num_local_hna * ETH_ALEN);
-	new_buff = kmalloc(new_len, GFP_ATOMIC);
+	batman_packet = (struct batman_packet *)batman_if->packet_buff;
+	mcast_mode = atomic_read(&bat_priv->mcast_mode);
 
-	/* keep old buffer if kmalloc should fail */
+	/* Avoid attaching MCAs, if multicast optimization is disabled */
+	if (mcast_mode == MCAST_MODE_PROACT_TRACKING) {
+		netif_addr_lock_bh(batman_if->soft_iface);
+		num_mca = netdev_mc_count(batman_if->soft_iface);
+		netif_addr_unlock_bh(batman_if->soft_iface);
+	}
+
+	if (atomic_read(&bat_priv->hna_local_changed) ||
+	    num_mca != batman_packet->num_mca) {
+		new_len = sizeof(struct batman_packet) +
+			(bat_priv->num_local_hna * ETH_ALEN) +
+			num_mca * ETH_ALEN;
+		new_buff = kmalloc(new_len, GFP_ATOMIC);
+	}
+
+	/*
+	 * if local hna or mca has changed but kmalloc failed
+	 * then just keep the old buffer
+	 */
 	if (new_buff) {
 		memcpy(new_buff, batman_if->packet_buff,
 		       sizeof(struct batman_packet));
@@ -239,6 +291,13 @@ static void rebuild_batman_packet(struct bat_priv *bat_priv,
 		batman_if->packet_buff = new_buff;
 		batman_if->packet_len = new_len;
 	}
+
+	/**
+	 * always copy mca entries (if there are any) - we have to
+	 * traverse the list anyway, so we can just do a memcpy instead of
+	 * memcmp for the sake of simplicity
+	 */
+	add_own_MCA(batman_packet, num_mca, batman_if->soft_iface);
 }
 
 void schedule_own_packet(struct batman_if *batman_if)
@@ -264,9 +323,7 @@ void schedule_own_packet(struct batman_if *batman_if)
 	if (batman_if->if_status == IF_TO_BE_ACTIVATED)
 		batman_if->if_status = IF_ACTIVE;
 
-	/* if local hna has changed and interface is a primary interface */
-	if ((atomic_read(&bat_priv->hna_local_changed)) &&
-	    (batman_if == bat_priv->primary_if))
+	if (batman_if == bat_priv->primary_if)
 		rebuild_batman_packet(bat_priv, batman_if);
 
 	/**
@@ -359,7 +416,8 @@ void schedule_forward_packet(struct orig_node *orig_node,
 	send_time = forward_send_time();
 	add_bat_packet_to_list(bat_priv,
 			       (unsigned char *)batman_packet,
-			       sizeof(struct batman_packet) + hna_buff_len,
+			       sizeof(struct batman_packet) + hna_buff_len
+			       + batman_packet->num_mca * ETH_ALEN,
 			       if_incoming, 0, send_time);
 }
 
