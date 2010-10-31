@@ -1249,6 +1249,9 @@ out:
  *
  * Then strips the batman-adv multicast header and sends it out of our soft
  * interface.
+ *
+ * Finally forwards (unstripped) copies according to the state of our multicast
+ * routing table to neighbor nodes.
  */
 int batadv_recv_mcast_packet(struct sk_buff *skb,
 			     struct batadv_hard_iface *recv_if)
@@ -1277,6 +1280,9 @@ int batadv_recv_mcast_packet(struct sk_buff *skb,
 
 	if (!orig_node)
 		goto out;
+
+	/* forward multicast packet if necessary */
+	batadv_mcast_forw_packet_route(skb, bat_priv);
 
 	/* Let's always send the frame upstream. If it's not actually for us
 	 * then the kernel will drop it later, or if we have a bridge

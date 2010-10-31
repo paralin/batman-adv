@@ -733,8 +733,8 @@ static inline void batadv_mcast_nexthops_from_table(
  *
  * Caller needs to free the provided skb.
  */
-static void batadv_mcast_forw_packet_route(struct sk_buff *skb,
-					   struct batadv_priv *bat_priv)
+void batadv_mcast_forw_packet_route(struct sk_buff *skb,
+				    struct batadv_priv *bat_priv)
 {
 	struct sk_buff *skb1;
 	struct batadv_mcast_packet *mcast_packet;

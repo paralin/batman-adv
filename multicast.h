@@ -60,6 +60,8 @@ int batadv_mcast_forw_table_timeout_set(struct net_device *net_dev, char *buff,
 					size_t count);
 int batadv_mcast_forw_send_skb(struct sk_buff *skb,
 			       struct batadv_priv *bat_priv);
+void batadv_mcast_forw_packet_route(struct sk_buff *skb,
+				    struct batadv_priv *bat_priv);
 int batadv_mcast_forw_table_seq_print_text(struct seq_file *seq, void *offset);
 
 #endif /* _NET_BATMAN_ADV_MULTICAST_H_ */
