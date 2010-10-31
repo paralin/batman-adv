@@ -48,6 +48,10 @@
 #define VIS_TYPE_SERVER_SYNC		0
 #define VIS_TYPE_CLIENT_UPDATE		1
 
+/* mcast defines */
+#define MCAST_MODE_CLASSIC_FLOODING	0
+#define MCAST_MODE_PROACT_TRACKING	1
+
 /* fragmentation defines */
 #define UNI_FRAG_HEAD 0x01
 #define UNI_FRAG_LARGETAIL 0x02
