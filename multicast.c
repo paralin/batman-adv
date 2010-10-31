@@ -164,6 +164,24 @@ void mcast_tracker_reset(struct bat_priv *bat_priv)
 	start_mcast_tracker(bat_priv);
 }
 
+static inline int get_remaining_timeout(
+				struct mcast_forw_nexthop_entry *nexthop_entry,
+				struct bat_priv *bat_priv)
+{
+	int tracker_timeout = atomic_read(&bat_priv->mcast_tracker_timeout);
+	if (!tracker_timeout)
+		tracker_timeout = atomic_read(&bat_priv->mcast_tracker_interval)
+				  * TRACKER_TIMEOUT_AUTO_X;
+	if (!tracker_timeout)
+		tracker_timeout = atomic_read(&bat_priv->orig_interval)
+				  * TRACKER_TIMEOUT_AUTO_X / 2;
+
+	tracker_timeout = jiffies_to_msecs(nexthop_entry->timeout) +
+			tracker_timeout - jiffies_to_msecs(jiffies);
+
+	return (tracker_timeout > 0 ? tracker_timeout : 0);
+}
+
 static void prepare_forw_if_entry(struct hlist_head *forw_if_list,
 				  int16_t if_num, uint8_t *neigh_addr)
 {
@@ -959,6 +977,91 @@ ok:
 	atomic_set(&bat_priv->mcast_tracker_timeout, new_tracker_timeout);
 
 	return count;
+}
+
+static inline struct batman_if *if_num_to_batman_if(int16_t if_num)
+{
+	struct batman_if *batman_if;
+
+	list_for_each_entry_rcu(batman_if, &if_list, list)
+		if (batman_if->if_num == if_num)
+			return batman_if;
+
+	return NULL;
+}
+
+static void seq_print_if_entry(struct mcast_forw_if_entry *if_entry,
+			       struct bat_priv *bat_priv, struct seq_file *seq)
+{
+	struct mcast_forw_nexthop_entry *nexthop_entry;
+	struct hlist_node *node;
+	struct batman_if *batman_if;
+
+	rcu_read_lock();
+	batman_if = if_num_to_batman_if(if_entry->if_num);
+	if (!batman_if) {
+		rcu_read_unlock();
+		return;
+	}
+
+	seq_printf(seq, "\t\t%s\n", batman_if->net_dev->name);
+	rcu_read_unlock();
+
+	hlist_for_each_entry(nexthop_entry, node,
+			     &if_entry->mcast_nexthop_list, list)
+		seq_printf(seq, "\t\t\t%pM - %i\n", nexthop_entry->neigh_addr,
+			   get_remaining_timeout(nexthop_entry, bat_priv));
+}
+
+static void seq_print_orig_entry(struct mcast_forw_orig_entry *orig_entry,
+				 struct bat_priv *bat_priv,
+				 struct seq_file *seq)
+{
+	struct mcast_forw_if_entry *if_entry;
+	struct hlist_node *node;
+
+	seq_printf(seq, "\t%pM\n", orig_entry->orig);
+	hlist_for_each_entry(if_entry, node, &orig_entry->mcast_if_list,
+			     list)
+		seq_print_if_entry(if_entry, bat_priv, seq);
+}
+
+static void seq_print_table_entry(struct mcast_forw_table_entry *table_entry,
+				  struct bat_priv *bat_priv,
+				  struct seq_file *seq)
+{
+	struct mcast_forw_orig_entry *orig_entry;
+	struct hlist_node *node;
+
+	seq_printf(seq, "%pM\n", table_entry->mcast_addr);
+	hlist_for_each_entry(orig_entry, node, &table_entry->mcast_orig_list,
+			     list)
+		seq_print_orig_entry(orig_entry, bat_priv, seq);
+}
+
+int mcast_forw_table_seq_print_text(struct seq_file *seq, void *offset)
+{
+	struct net_device *net_dev = (struct net_device *)seq->private;
+	struct bat_priv *bat_priv = netdev_priv(net_dev);
+	struct mcast_forw_table_entry *table_entry;
+	struct hlist_node *node;
+
+	seq_printf(seq, "[B.A.T.M.A.N. adv %s%s, MainIF/MAC: %s/%pM (%s)]\n",
+		   SOURCE_VERSION, REVISION_VERSION_STR,
+		   bat_priv->primary_if->net_dev->name,
+		   bat_priv->primary_if->net_dev->dev_addr, net_dev->name);
+	seq_printf(seq, "Multicast group MAC\tOriginator\t"
+			"Outgoing interface\tNexthop - timeout in msecs\n");
+
+	spin_lock_bh(&bat_priv->mcast_forw_table_lock);
+
+	hlist_for_each_entry(table_entry, node, &bat_priv->mcast_forw_table,
+			     list)
+		seq_print_table_entry(table_entry, bat_priv, seq);
+
+	spin_unlock_bh(&bat_priv->mcast_forw_table_lock);
+
+	return 0;
 }
 
 int mcast_init(struct bat_priv *bat_priv)
