@@ -43,6 +43,7 @@
  */
 
 #include "main.h"
+#include "hash.h"
 
 /* should match batadv_ogm_packet's mcast_num_mla */
 #define BATADV_MLA_MAX UINT8_MAX
@@ -526,6 +527,54 @@ out:
 	return ret < 0 ? ret : num_mla;
 }
 
+/**
+ * batadv_mcast_mla_update - Updates MLA buffer of another originator
+ * @orig_node:	The originator node who's MLA buffer we want to check/update
+ * @mla_buff:	The new MLA information we just received
+ * @num_mla:	Number of MLAs within mla_buff
+ * @bat_priv:	bat_priv for checking if multicast optimization is enabled
+ *
+ * If multicast optimization is enabled then this checks whether the MCA
+ * information we just received from another originator has changed.
+ * If so, it updates our internal MLA buffer.
+ */
+void batadv_mcast_mla_update(struct batadv_orig_node *orig_node,
+			     const unsigned char *mla_buff, int num_mla,
+			     struct batadv_priv *bat_priv)
+{
+	/* Avoid buffering MLAs, if multicast optimization is disabled */
+	if (!atomic_read(&bat_priv->mcast_group_awareness))
+		return;
+
+	spin_lock_bh(&orig_node->mcast_mla_lock);
+
+	/* numbers differ? then reallocate buffer */
+	if (num_mla != orig_node->mcast_num_mla) {
+		kfree(orig_node->mcast_mla_buff);
+		if (num_mla > 0) {
+			orig_node->mcast_mla_buff =
+				kmalloc(batadv_mcast_mla_len(num_mla),
+					GFP_ATOMIC);
+			if (orig_node->mcast_mla_buff)
+				goto update;
+		}
+		orig_node->mcast_mla_buff = NULL;
+		orig_node->mcast_num_mla = 0;
+	/* size ok, just update? */
+	} else if (num_mla > 0 && memcmp(orig_node->mcast_mla_buff, mla_buff,
+					 batadv_mcast_mla_len(num_mla)))
+		goto update;
+
+	/* it's the same, leave it like that */
+	goto out;
+
+update:
+	memcpy(orig_node->mcast_mla_buff, mla_buff, num_mla * ETH_ALEN);
+	orig_node->mcast_num_mla = num_mla;
+out:
+	spin_unlock_bh(&orig_node->mcast_mla_lock);
+}
+
 int batadv_mcast_mla_local_seq_print_text(struct seq_file *seq, void *offset)
 {
 	struct net_device *net_dev = (struct net_device *)seq->private;
@@ -586,3 +635,43 @@ int batadv_mcast_mla_bridge_seq_print_text(struct seq_file *seq, void *offset)
 	return 0;
 }
 #endif
+
+int batadv_mcast_mla_global_seq_print_text(struct seq_file *seq, void *offset)
+{
+	struct net_device *net_dev = (struct net_device *)seq->private;
+	struct batadv_priv *bat_priv = netdev_priv(net_dev);
+	struct batadv_hashtable *hash = bat_priv->orig_hash;
+	struct batadv_orig_node *orig_node;
+	struct hlist_node *walk;
+	struct hlist_head *head;
+	int i, j;
+
+	seq_printf(seq,
+		   "Globally retrieved multicast listener announcements (from %s):\n",
+		   net_dev->name);
+
+	for (i = 0; i < hash->size; i++) {
+		head = &hash->table[i];
+
+		rcu_read_lock();
+		hlist_for_each_entry_rcu(orig_node, walk, head, hash_entry) {
+			spin_lock_bh(&orig_node->mcast_mla_lock);
+			if (!orig_node->mcast_num_mla) {
+				spin_unlock_bh(&orig_node->mcast_mla_lock);
+				continue;
+			}
+
+			seq_printf(seq, "Originator: %pM\n", orig_node->orig);
+			for (j = 0; j < orig_node->mcast_num_mla; j++) {
+				seq_printf(seq, "\t%pM",
+					   &orig_node->mcast_mla_buff[
+								j * ETH_ALEN]);
+			}
+			seq_printf(seq, "\n");
+			spin_unlock_bh(&orig_node->mcast_mla_lock);
+		}
+		rcu_read_unlock();
+	}
+
+	return 0;
+}

@@ -28,9 +28,13 @@ int batadv_mcast_mla_len(int changes_num);
 int batadv_mcast_mla_append(struct net_device *soft_iface,
 			    unsigned char **packet_buff, int *packet_buff_len,
 			    int packet_min_len);
+void batadv_mcast_mla_update(struct batadv_orig_node *orig_node,
+			     const unsigned char *mla_buff, int num_mla,
+			     struct batadv_priv *bat_priv);
 int batadv_mcast_mla_local_seq_print_text(struct seq_file *seq, void *offset);
 #ifdef CONFIG_BATMAN_ADV_MCAST_BRIDGE_SNOOP
 int batadv_mcast_mla_bridge_seq_print_text(struct seq_file *seq, void *offset);
 #endif
+int batadv_mcast_mla_global_seq_print_text(struct seq_file *seq, void *offset);
 
 #endif /* _NET_BATMAN_ADV_MULTICAST_H_ */
