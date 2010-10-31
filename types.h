@@ -77,6 +77,8 @@ struct orig_node {
 	uint8_t flags;
 	unsigned char *hna_buff;
 	int16_t hna_buff_len;
+	unsigned char *mca_buff;
+	uint8_t num_mca;
 	uint32_t last_real_seqno;
 	uint8_t last_ttl;
 	unsigned long bcast_bits[NUM_WORDS];
@@ -94,6 +96,7 @@ struct orig_node {
 				  * neigh_node->real_packet_count */
 	spinlock_t bcast_seqno_lock; /* protects bcast_bits,
 				      *	 last_bcast_seqno */
+	spinlock_t mca_lock; /* protects mca_buff, num_mca */
 	atomic_t bond_candidates;
 	struct list_head bond_list;
 };

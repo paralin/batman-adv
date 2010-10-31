@@ -30,5 +30,6 @@ int mcast_mca_local_seq_print_text(struct seq_file *seq, void *offset);
 int mcast_mca_bridge_seq_print_text(struct seq_file *seq, void *offset);
 void br_mc_cpy(char *dst, struct br_ip *src);
 #endif
+int mcast_mca_global_seq_print_text(struct seq_file *seq, void *offset);
 
 #endif /* _NET_BATMAN_ADV_MULTICAST_H_ */

@@ -20,6 +20,7 @@
  */
 
 #include "main.h"
+#include "hash.h"
 #include "multicast.h"
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 37)
@@ -253,3 +254,43 @@ int mcast_mca_bridge_seq_print_text(struct seq_file *seq, void *offset)
 	return 0;
 }
 #endif
+
+int mcast_mca_global_seq_print_text(struct seq_file *seq, void *offset)
+{
+	struct net_device *net_dev = (struct net_device *)seq->private;
+	struct bat_priv *bat_priv = netdev_priv(net_dev);
+	struct hashtable_t *hash = bat_priv->orig_hash;
+	struct orig_node *orig_node;
+	struct hlist_node *walk;
+	struct hlist_head *head;
+	int i, j;
+
+	seq_printf(seq, "[B.A.T.M.A.N. adv %s%s, MainIF/MAC: %s/%pM (%s)]\n",
+		   SOURCE_VERSION, REVISION_VERSION_STR,
+		   bat_priv->primary_if->net_dev->name,
+		   bat_priv->primary_if->net_dev->dev_addr, net_dev->name);
+
+	for (i = 0; i < hash->size; i++) {
+		head = &hash->table[i];
+
+		rcu_read_lock();
+		hlist_for_each_entry_rcu(orig_node, walk, head, hash_entry) {
+			spin_lock_bh(&orig_node->mca_lock);
+			if (!orig_node->num_mca) {
+				spin_unlock_bh(&orig_node->mca_lock);
+				continue;
+			}
+
+			seq_printf(seq, "Originator: %pM\n", orig_node->orig);
+			for (j = 0; j < orig_node->num_mca; j++) {
+				seq_printf(seq, "\t%pM",
+					   &orig_node->mca_buff[j * ETH_ALEN]);
+			}
+			seq_printf(seq, "\n");
+			spin_unlock_bh(&orig_node->mca_lock);
+		}
+		rcu_read_unlock();
+	}
+
+	return 0;
+}

@@ -82,6 +82,38 @@ static void update_HNA(struct bat_priv *bat_priv, struct orig_node *orig_node,
 	}
 }
 
+/* Copy the mca buffer again if something has changed */
+static void update_MCA(struct orig_node *orig_node,
+		       unsigned char *mca_buff, int num_mca)
+{
+	spin_lock_bh(&orig_node->mca_lock);
+
+	/* numbers differ? then reallocate buffer */
+	if (num_mca != orig_node->num_mca) {
+		kfree(orig_node->mca_buff);
+		if (num_mca > 0) {
+			orig_node->mca_buff =
+				kmalloc(num_mca * ETH_ALEN, GFP_ATOMIC);
+			if (orig_node->mca_buff)
+				goto update;
+		}
+		orig_node->mca_buff = NULL;
+		orig_node->num_mca = 0;
+	/* size ok, just update? */
+	} else if (num_mca > 0 &&
+		 memcmp(orig_node->mca_buff, mca_buff, num_mca * ETH_ALEN))
+		goto update;
+
+	/* it's the same, leave it like that */
+	goto out;
+
+update:
+	memcpy(orig_node->mca_buff, mca_buff, num_mca * ETH_ALEN);
+	orig_node->num_mca = num_mca;
+out:
+	spin_unlock_bh(&orig_node->mca_lock);
+}
+
 static void update_route(struct bat_priv *bat_priv,
 			 struct orig_node *orig_node,
 			 struct neigh_node *neigh_node,
@@ -396,6 +428,7 @@ static void update_orig(struct bat_priv *bat_priv,
 	struct hlist_node *node;
 	int tmp_hna_buff_len;
 	uint8_t bcast_own_sum_orig, bcast_own_sum_neigh;
+	unsigned char *mca_buff;
 
 	bat_dbg(DBG_BATMAN, bat_priv, "update_originator(): "
 		"Searching and updating originator entry of received packet\n");
@@ -461,6 +494,7 @@ static void update_orig(struct bat_priv *bat_priv,
 
 	tmp_hna_buff_len = (hna_buff_len > batman_packet->num_hna * ETH_ALEN ?
 			    batman_packet->num_hna * ETH_ALEN : hna_buff_len);
+	mca_buff = (char *)batman_packet + BAT_PACKET_LEN + tmp_hna_buff_len;
 
 	/* if this neighbor already is our next hop there is nothing
 	 * to change */
@@ -511,6 +545,8 @@ update_gw:
 	    (atomic_read(&bat_priv->gw_sel_class) > 2))
 		gw_check_election(bat_priv, orig_node);
 
+	/* and update multicast group announcement buffer */
+	update_MCA(orig_node, mca_buff, batman_packet->num_mca);
 	goto out;
 
 unlock:
