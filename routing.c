@@ -35,6 +35,7 @@
 #include "gateway_common.h"
 #include "gateway_client.h"
 #include "unicast.h"
+#include "multicast.h"
 
 void slide_own_bcast_window(struct batman_if *batman_if)
 {
@@ -1498,6 +1499,24 @@ out:
 	if (orig_node)
 		kref_put(&orig_node->refcount, orig_node_free_ref);
 	return ret;
+}
+
+int recv_mcast_tracker_packet(struct sk_buff *skb, struct batman_if *recv_if)
+{
+	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
+	struct mcast_tracker_packet *tracker_packet;
+	int hdr_size = sizeof(struct mcast_tracker_packet);
+
+	if (check_unicast_packet(skb, hdr_size) < 0)
+		return NET_RX_DROP;
+
+	tracker_packet = (struct mcast_tracker_packet *)skb->data;
+
+	route_mcast_tracker_packet(tracker_packet, skb->len, bat_priv);
+
+	dev_kfree_skb(skb);
+
+	return NET_RX_SUCCESS;
 }
 
 int recv_vis_packet(struct sk_buff *skb, struct batman_if *recv_if)
