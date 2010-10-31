@@ -1509,20 +1509,65 @@ out:
 int recv_mcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 {
 	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
+	struct orig_node *orig_node = NULL;
+	struct mcast_packet *mcast_packet;
 	struct ethhdr *ethhdr;
 	struct netdev_hw_addr *mc_entry;
-	int ret = 1;
+	int32_t seq_diff;
+	int ret = NET_RX_DROP;
 	int hdr_size = sizeof(struct mcast_packet);
 
 	/* multicast data packets might be received via unicast or broadcast */
 	if (check_unicast_packet(skb, hdr_size) < 0 &&
 	    check_broadcast_packet(skb, hdr_size) < 0)
-		return NET_RX_DROP;
+		goto out;
+
+	mcast_packet = (struct mcast_packet *)skb->data;
+
+	/* ignore broadcasts originated by myself */
+	if (is_my_mac(mcast_packet->orig))
+		goto out;
+
+	if (mcast_packet->ttl < 2)
+		goto out;
+
+	rcu_read_lock();
+	orig_node = ((struct orig_node *)
+		     hash_find(bat_priv->orig_hash, compare_orig, choose_orig,
+			       mcast_packet->orig));
+
+	if (!orig_node)
+		goto rcu_unlock;
+
+	kref_get(&orig_node->refcount);
+	rcu_read_unlock();
+
+	spin_lock_bh(&orig_node->mcast_seqno_lock);
+
+	/* check whether the packet is a duplicate */
+	if (get_bit_status(orig_node->mcast_bits,
+			   orig_node->last_mcast_seqno,
+			   ntohl(mcast_packet->seqno)))
+		goto spin_unlock;
+
+	seq_diff = ntohl(mcast_packet->seqno) - orig_node->last_mcast_seqno;
+
+	/* check whether the packet is old and the host just restarted. */
+	if (window_protected(bat_priv, seq_diff,
+			     &orig_node->mcast_seqno_reset))
+		goto spin_unlock;
+
+	/* mark broadcast in flood history, update window position
+	 * if required. */
+	if (bit_get_packet(bat_priv, orig_node->mcast_bits, seq_diff, 1))
+		orig_node->last_mcast_seqno = ntohl(mcast_packet->seqno);
+
+	spin_unlock_bh(&orig_node->mcast_seqno_lock);
 
 	/* forward multicast packet if necessary */
 	route_mcast_packet(skb, bat_priv);
 
-	ethhdr = (struct ethhdr *)(skb->data + sizeof(struct mcast_packet));
+	ethhdr = (struct ethhdr *)(mcast_packet + 1);
 
 	/* multicast for me? */
 	netif_addr_lock_bh(recv_if->soft_iface);
@@ -1536,7 +1581,18 @@ int recv_mcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	if (!ret)
 		interface_rx(recv_if->soft_iface, skb, recv_if, hdr_size);
 
-	return NET_RX_SUCCESS;
+	ret = NET_RX_SUCCESS;
+	goto out;
+
+rcu_unlock:
+	rcu_read_unlock();
+	goto out;
+spin_unlock:
+	spin_unlock_bh(&orig_node->mcast_seqno_lock);
+out:
+	if (orig_node)
+		kref_put(&orig_node->refcount, orig_node_free_ref);
+	return ret;
 }
 
 int recv_mcast_tracker_packet(struct sk_buff *skb, struct batman_if *recv_if)
