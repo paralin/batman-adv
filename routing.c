@@ -1245,7 +1245,8 @@ out:
  * @skb:	The incoming batman multicast packet
  * @recv_if:	The interface we received the packet from
  *
- * Performs some sanity checks on the provided multicast skb first.
+ * Performs some sanity checks on the provided multicast skb first,
+ * including a duplicate check.
  *
  * Then strips the batman-adv multicast header and sends it out of our soft
  * interface.
@@ -1261,6 +1262,7 @@ int batadv_recv_mcast_packet(struct sk_buff *skb,
 	struct batadv_mcast_packet *mcast_packet;
 	int hdr_size = sizeof(*mcast_packet);
 	int ret = NET_RX_DROP;
+	int32_t seq_diff;
 
 	/* multicast data packets might be received via unicast or broadcast */
 	if (batadv_check_unicast_packet(skb, hdr_size) < 0 &&
@@ -1281,6 +1283,28 @@ int batadv_recv_mcast_packet(struct sk_buff *skb,
 	if (!orig_node)
 		goto out;
 
+	spin_lock_bh(&orig_node->mcast_seqno_lock);
+
+	/* check whether the packet is a duplicate */
+	if (batadv_test_bit(orig_node->mcast_bits, orig_node->last_mcast_seqno,
+			    ntohl(mcast_packet->seqno)))
+		goto spin_unlock;
+
+	seq_diff = ntohl(mcast_packet->seqno) - orig_node->last_mcast_seqno;
+
+	/* check whether the packet is old and the host just restarted. */
+	if (batadv_window_protected(bat_priv, seq_diff,
+				    &orig_node->mcast_seqno_reset))
+		goto spin_unlock;
+
+	/* mark multicast in flood history, update window position
+	 * if required.
+	 */
+	if (batadv_bit_get_packet(bat_priv, orig_node->mcast_bits, seq_diff, 1))
+		orig_node->last_mcast_seqno = ntohl(mcast_packet->seqno);
+
+	spin_unlock_bh(&orig_node->mcast_seqno_lock);
+
 	/* forward multicast packet if necessary */
 	batadv_mcast_forw_packet_route(skb, bat_priv);
 
@@ -1291,7 +1315,10 @@ int batadv_recv_mcast_packet(struct sk_buff *skb,
 			    hdr_size, orig_node);
 
 	ret = NET_RX_SUCCESS;
+	goto out;
 
+spin_unlock:
+	spin_unlock_bh(&orig_node->mcast_seqno_lock);
 out:
 	if (orig_node)
 		batadv_orig_node_free_ref(orig_node);

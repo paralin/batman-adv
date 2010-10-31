@@ -91,6 +91,7 @@ struct batadv_orig_node {
 	uint8_t *bcast_own_sum;
 	unsigned long last_seen;
 	unsigned long bcast_seqno_reset;
+	unsigned long mcast_seqno_reset;
 	unsigned long batman_seqno_reset;
 	uint8_t gw_flags;
 	uint8_t flags;
@@ -106,7 +107,9 @@ struct batadv_orig_node {
 	uint32_t last_real_seqno;
 	uint8_t last_ttl;
 	DECLARE_BITMAP(bcast_bits, BATADV_TQ_LOCAL_WINDOW_SIZE);
+	DECLARE_BITMAP(mcast_bits, BATADV_TQ_LOCAL_WINDOW_SIZE);
 	uint32_t last_bcast_seqno;
+	uint32_t last_mcast_seqno;
 	struct hlist_head neigh_list;
 	struct list_head frag_list;
 	spinlock_t neigh_list_lock; /* protects neigh_list and router */
@@ -122,6 +125,8 @@ struct batadv_orig_node {
 	/* bcast_seqno_lock protects bcast_bits, last_bcast_seqno */
 	spinlock_t bcast_seqno_lock;
 	spinlock_t mcast_mla_lock; /* protects mcast_mla_buff, mcast_num_mla */
+	spinlock_t mcast_seqno_lock; /* protects mcast_bits,
+				      *	 last_mcast_seqno */
 	spinlock_t tt_list_lock; /* protects tt_list */
 	atomic_t bond_candidates;
 	struct list_head bond_list;
