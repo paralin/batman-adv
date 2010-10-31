@@ -313,6 +313,7 @@ int hardif_enable_interface(struct batman_if *batman_if, char *iface_name)
 	batman_packet->ttl = 2;
 	batman_packet->tq = TQ_MAX_VALUE;
 	batman_packet->num_hna = 0;
+	batman_packet->num_mca = 0;
 
 	batman_if->if_num = bat_priv->num_ifaces;
 	bat_priv->num_ifaces++;
