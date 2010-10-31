@@ -97,6 +97,8 @@
  *  Vis
  */
 
+#define UINT8_MAX 255
+
 /*
  * Kernel headers
  */

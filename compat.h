@@ -270,4 +270,48 @@ int bat_seq_printf(struct seq_file *m, const char *f, ...);
 
 #endif /* < KERNEL_VERSION(2, 6, 33) */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35)
+
+#define netdev_mc_count(dev) ((dev)->mc_count)
+#undef  netdev_for_each_mc_addr
+#define netdev_for_each_mc_addr(mclist, dev) \
+	for (mclist = (struct bat_dev_addr_list*)dev->mc_list; mclist; \
+	     mclist = (struct bat_dev_addr_list*)mclist->next)
+
+#endif /* < KERNEL_VERSION(2, 6, 35) */
+
+
+/*
+ * net_device - multicast list handling
+ *	structures
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35)
+
+/* Note, that this breaks the usage of the normal 'struct netdev_hw_addr'
+ * for kernels < 2.6.35 in batman-adv! */
+#define netdev_hw_addr bat_dev_addr_list
+struct bat_dev_addr_list {
+	struct dev_addr_list *next;
+	u8  addr[MAX_ADDR_LEN];
+	u8  da_addrlen;
+	u8  da_synced;
+	int da_users;
+	int da_gusers;
+};
+
+#endif /* < KERNEL_VERSION(2, 6, 35) */
+
+/*
+ * net_device - multicast list handling
+ *	locking
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 27)
+
+#define netif_addr_lock_bh(soft_iface) \
+		netif_tx_lock_bh(soft_iface)
+#define netif_addr_unlock_bh(soft_iface) \
+		netif_tx_unlock_bh(soft_iface)
+
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 27) */
+
 #endif /* _NET_BATMAN_ADV_COMPAT_H_ */
