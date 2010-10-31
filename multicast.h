@@ -29,6 +29,7 @@ int mcast_tracker_timeout_set(struct net_device *net_dev, char *buff,
 void mcast_tracker_reset(struct bat_priv *bat_priv);
 void route_mcast_tracker_packet(struct sk_buff *tracker_packet,
 				struct bat_priv *bat_priv);
+void purge_mcast_forw_table(struct bat_priv *bat_priv);
 int mcast_forw_table_seq_print_text(struct seq_file *seq, void *offset);
 int mcast_init(struct bat_priv *bat_priv);
 void mcast_free(struct bat_priv *bat_priv);
