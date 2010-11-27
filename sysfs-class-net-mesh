@@ -91,3 +91,11 @@ Description:
                 feasible without having a central instance to collect
                 the local topologies from all nodes. This file allows
                 to activate the collecting (server) mode.
+
+What:           /sys/class/net/<mesh_iface>/mesh/num_bcasts
+Date:           Sep 2012
+Contact:        Linus Lüssing <linus.luessing@web.de>
+Description:
+		Defines the number of broadcasts used to forward
+		a multicast (including broadcast) payload frame on an
+		interface.
