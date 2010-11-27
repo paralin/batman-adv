@@ -340,6 +340,31 @@ static int interface_change_mtu(struct net_device *dev, int new_mtu)
 	return 0;
 }
 
+static int mcast_may_optimize(uint8_t *dest, struct net_device *soft_iface)
+{
+	MC_LIST *mc_entry;
+	struct bat_priv *bat_priv = netdev_priv(soft_iface);
+	int mcast_mode = atomic_read(&bat_priv->mcast_mode);
+
+	if (mcast_mode != MCAST_MODE_PROACT_TRACKING)
+		return 0;
+
+	/* Still allow flooding of multicast packets of protocols where it is
+	 * not easily possible for a multicast sender to be a multicast
+	 * receiver of the same group (for instance IPv6 NDP) */
+	netif_addr_lock_bh(soft_iface);
+	netdev_for_each_mc_addr(mc_entry, soft_iface) {
+		if (memcmp(dest, mc_entry->MC_LIST_ADDR, ETH_ALEN))
+			continue;
+
+		netif_addr_unlock_bh(soft_iface);
+		return 1;
+	}
+	netif_addr_unlock_bh(soft_iface);
+
+	return 0;
+}
+
 int interface_tx(struct sk_buff *skb, struct net_device *soft_iface)
 {
 	struct ethhdr *ethhdr = (struct ethhdr *)skb->data;
@@ -392,8 +417,7 @@ int interface_tx(struct sk_buff *skb, struct net_device *soft_iface)
 
 		if (is_broadcast_ether_addr(ethhdr->h_dest))
 			bcast_dst = true;
-		else if (atomic_read(&bat_priv->mcast_mode) ==
-			 MCAST_MODE_PROACT_TRACKING)
+		else if (mcast_may_optimize(ethhdr->h_dest, soft_iface))
 			mcast_dst = true;
 		else
 			bcast_dst = true;
