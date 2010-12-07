@@ -264,4 +264,53 @@ int bat_seq_printf(struct seq_file *m, const char *f, ...);
 
 #endif /* < KERNEL_VERSION(2, 6, 29) */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 34)
+
+#define netdev_mc_count(dev) ((dev)->mc_count)
+#define netdev_for_each_mc_addr(mclist, dev) \
+	for (mclist = dev->mc_list; mclist; mclist = mclist->next)
+
+#endif /* < KERNEL_VERSION(2, 6, 34) */
+
+
+/*
+ * net_device - multicast list handling
+ * 	structures
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35)
+
+#define MC_LIST struct dev_addr_list
+#define MC_LIST_ADDR da_addr
+
+#endif /* < KERNEL_VERSION(2, 6, 35) */
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 34)
+
+#define MC_LIST struct netdev_hw_addr_list_mc
+#define MC_LIST_ADDR addr
+
+#endif /* > KERNEL_VERSION(2, 6, 34) */
+
+/*
+ * net_device - multicast list handling
+ * 	locking
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 27)
+
+#define MC_LIST_LOCK(soft_iface, flags) \
+		spin_lock_irqsave(&soft_iface->_xmit_lock, flags)
+#define MC_LIST_UNLOCK(soft_iface, flags) \
+		spin_unlock_irqrestore(&soft_iface->_xmit_lock, flags)
+
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 27) */
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 26)
+
+#define MC_LIST_LOCK(soft_iface, flags) \
+		spin_lock_irqsave(&soft_iface->addr_list_lock, flags)
+#define MC_LIST_UNLOCK(soft_iface, flags) \
+		spin_unlock_irqrestore(&soft_iface->addr_list_lock, flags)
+
+#endif /* > KERNEL_VERSION(2, 6, 26) */
+
 #endif /* _NET_BATMAN_ADV_COMPAT_H_ */
