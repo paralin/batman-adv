@@ -23,6 +23,7 @@
 #include "multicast.h"
 #include "hash.h"
 #include "send.h"
+#include "soft-interface.h"
 #include "compat.h"
 
 /* If auto mode for tracker timeout has been selected,
@@ -1056,6 +1057,138 @@ int mcast_forw_table_seq_print_text(struct seq_file *seq, void *offset)
 	rcu_read_unlock();
 
 	return 0;
+}
+
+static void route_mcast_packet(struct sk_buff *skb, struct bat_priv *bat_priv)
+{
+	struct sk_buff *skb1;
+	struct mcast_packet *mcast_packet;
+	struct ethhdr *ethhdr;
+	struct batman_if *batman_if;
+	unsigned long flags;
+	struct mcast_forw_table_entry *table_entry;
+	struct mcast_forw_orig_entry *orig_entry;
+	struct mcast_forw_if_entry *if_entry;
+	struct mcast_forw_nexthop_entry *nexthop_entry;
+	int mcast_fanout = atomic_read(&bat_priv->mcast_fanout);
+	int num_bcasts = 3, i;
+	struct dest_entries_list dest_list, *dest_entry, *tmp;
+
+	mcast_packet = (struct mcast_packet*)skb->data;
+	ethhdr = (struct ethhdr*)(mcast_packet + 1);
+
+	INIT_LIST_HEAD(&dest_list.list);
+
+	mcast_packet->ttl--;
+
+	rcu_read_lock();
+	spin_lock_irqsave(&bat_priv->mcast_forw_table_lock, flags);
+	list_for_each_entry(table_entry, &bat_priv->mcast_forw_table, list) {
+		if (memcmp(ethhdr->h_dest, table_entry->mcast_addr, ETH_ALEN))
+			continue;
+
+		list_for_each_entry(orig_entry, &table_entry->mcast_orig_list,
+				    list) {
+			if (memcmp(mcast_packet->orig,
+				   orig_entry->orig, ETH_ALEN))
+				continue;
+
+			list_for_each_entry(if_entry,
+					    &orig_entry->mcast_if_list, list) {
+				batman_if = if_num_to_batman_if(
+							if_entry->if_num);
+
+				/* send via broadcast */
+				if (if_entry->num_nexthops > mcast_fanout) {
+					dest_entry = kmalloc(sizeof(struct
+							dest_entries_list),
+							GFP_ATOMIC);
+					memcpy(dest_entry->dest,
+					       broadcast_addr, ETH_ALEN);
+					dest_entry->batman_if = batman_if;
+					list_add(&dest_entry->list,
+						 &dest_list.list);
+					continue;
+				}
+
+				/* send seperate unicast packets */
+				list_for_each_entry(nexthop_entry,
+						&if_entry->mcast_nexthop_list,
+						list) {
+					if (!get_remaining_timeout(
+								nexthop_entry,
+								bat_priv))
+						continue;
+
+					dest_entry = kmalloc(sizeof(struct
+							dest_entries_list),
+							GFP_ATOMIC);
+					memcpy(dest_entry->dest,
+					       nexthop_entry->neigh_addr,
+					       ETH_ALEN);
+					dest_entry->batman_if = batman_if;
+					list_add(&dest_entry->list,
+						 &dest_list.list);
+				}
+			}
+			break;
+		}
+		break;
+	}
+	spin_unlock_irqrestore(&bat_priv->mcast_forw_table_lock, flags);
+
+	list_for_each_entry_safe (dest_entry, tmp, &dest_list.list, list) {
+		if (is_broadcast_ether_addr(dest_entry->dest)) {
+			for (i = 0; i < num_bcasts; i++) {
+				skb1 = skb_clone(skb, GFP_ATOMIC);
+				send_skb_packet(skb1, dest_entry->batman_if,
+						dest_entry->dest);
+			}
+		} else {
+			skb1 = skb_clone(skb, GFP_ATOMIC);
+			send_skb_packet(skb1, dest_entry->batman_if,
+					dest_entry->dest);
+		}
+		list_del(&dest_entry->list);
+		kfree(dest_entry);
+	}
+	rcu_read_unlock();
+}
+
+int mcast_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv)
+{
+	struct mcast_packet *mcast_packet;
+
+	if (!bat_priv->primary_if)
+		goto dropped;
+
+	if (my_skb_head_push(skb, sizeof(struct mcast_packet)) < 0)
+		goto dropped;
+
+	mcast_packet = (struct mcast_packet *)skb->data;
+	mcast_packet->version = COMPAT_VERSION;
+	mcast_packet->ttl = TTL;
+
+	/* batman packet type: broadcast */
+	mcast_packet->packet_type = BAT_MCAST;
+
+	/* hw address of first interface is the orig mac because only
+	 * this mac is known throughout the mesh */
+	memcpy(mcast_packet->orig,
+	       bat_priv->primary_if->net_dev->dev_addr, ETH_ALEN);
+
+	/* set broadcast sequence number */
+	mcast_packet->seqno =
+		htonl(atomic_inc_return(&bat_priv->mcast_seqno));
+
+	route_mcast_packet(skb, bat_priv);
+
+	kfree_skb(skb);
+	return 0;
+
+dropped:
+	kfree_skb(skb);
+	return 1;
 }
 
 int mcast_init(struct bat_priv *bat_priv)
