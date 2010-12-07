@@ -28,6 +28,10 @@
 		.index = 0, .walk = NULL, \
 		.safe = NULL}
 
+#define HASHIT_RESET(name) \
+		name.index = 0, name.walk = NULL; \
+		name.safe = NULL
+
 /* callback to a compare function.  should
  * compare 2 element datas for their keys,
  * return 0 if same and not 0 if not
