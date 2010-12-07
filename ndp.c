@@ -20,10 +20,24 @@ static void ndp_send(struct work_struct *work)
 	struct batman_if *batman_if = container_of(work, struct batman_if,
 							ndp_wq.work);
 	struct bat_priv *bat_priv = netdev_priv(batman_if->soft_iface);
+	struct batman_packet_ndp *ndp_packet = (struct batman_packet_ndp*)
+						batman_if->ndp_packet_buff;
+	int packet_len = sizeof(struct batman_packet_ndp);
+	struct sk_buff *skb;
+
+	ndp_packet->seqno = atomic_read(&batman_if->ndp_seqno);
 
 	bat_dbg(DBG_BATMAN, bat_priv,
 		"batman-adv:Sending ndp packet on interface %s, seqno %d\n",
-		batman_if->net_dev, atomic_read(&batman_if->ndp_seqno));
+		batman_if->net_dev, ntohl(ndp_packet->seqno));
+
+	skb = dev_alloc_skb(packet_len + sizeof(struct ethhdr));
+	skb_reserve(skb, sizeof(struct ethhdr));
+
+	memcpy(skb_put(skb, packet_len), batman_if->ndp_packet_buff,
+	       packet_len);
+
+	send_skb_packet(skb, batman_if, broadcast_addr);
 
 	atomic_inc(&batman_if->ndp_seqno);
 	start_ndp_timer(batman_if);
@@ -31,14 +45,35 @@ static void ndp_send(struct work_struct *work)
 
 int ndp_init(struct batman_if *batman_if)
 {
+	struct batman_packet_ndp *ndp_packet;
+
 	atomic_set(&batman_if->ndp_interval, 500);
 	atomic_set(&batman_if->ndp_seqno, 0);
+
+	batman_if->ndp_packet_buff =
+		kmalloc(ETH_DATA_LEN, GFP_ATOMIC);
+	if (!batman_if->ndp_packet_buff) {
+		printk(KERN_ERR "batman-adv: Can't add "
+			"local interface packet (%s): out of memory\n",
+			batman_if->net_dev->name);
+		goto err;
+	}
+	memset(batman_if->ndp_packet_buff, 0, batman_if->packet_len);
+	ndp_packet = (struct batman_packet_ndp*)
+			batman_if->ndp_packet_buff;
+
+	ndp_packet->packet_type = BAT_PACKET_NDP;
+	ndp_packet->version = COMPAT_VERSION;
+
 	INIT_DELAYED_WORK(&batman_if->ndp_wq, ndp_send);
 
 	return 0;
+err:
+	return 1;
 }
 
 void ndp_free(struct batman_if *batman_if)
 {
 	stop_ndp_timer(batman_if);
+	kfree(batman_if->ndp_packet_buff);
 }
