@@ -1391,8 +1391,11 @@ int recv_bcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 int recv_mcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 {
 	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
+	struct orig_node *orig_node;
+	struct mcast_packet *mcast_packet;
 	struct ethhdr *ethhdr;
 	MC_LIST *mc_entry;
+	int32_t seq_diff;
 	unsigned long flags;
 	int ret = 1;
 	int hdr_size = sizeof(struct mcast_packet);
@@ -1402,10 +1405,53 @@ int recv_mcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	    check_broadcast_packet(skb, hdr_size) < 0)
 		return NET_RX_DROP;
 
+	mcast_packet = (struct mcast_packet *)skb->data;
+
+	/* ignore broadcasts originated by myself */
+	if (is_my_mac(mcast_packet->orig))
+		return NET_RX_DROP;
+
+	if (mcast_packet->ttl < 2)
+		return NET_RX_DROP;
+
+	spin_lock_irqsave(&bat_priv->orig_hash_lock, flags);
+	orig_node = ((struct orig_node *)
+		     hash_find(bat_priv->orig_hash, compare_orig, choose_orig,
+			       mcast_packet->orig));
+
+	if (orig_node == NULL) {
+		spin_unlock_irqrestore(&bat_priv->orig_hash_lock, flags);
+		return NET_RX_DROP;
+	}
+
+	/* check whether the packet is a duplicate */
+	if (get_bit_status(orig_node->mcast_bits,
+			   orig_node->last_mcast_seqno,
+			   ntohl(mcast_packet->seqno))) {
+		spin_unlock_irqrestore(&bat_priv->orig_hash_lock, flags);
+		return NET_RX_DROP;
+	}
+
+	seq_diff = ntohl(mcast_packet->seqno) - orig_node->last_mcast_seqno;
+
+	/* check whether the packet is old and the host just restarted. */
+	if (window_protected(bat_priv, seq_diff,
+			     &orig_node->mcast_seqno_reset)) {
+		spin_unlock_irqrestore(&bat_priv->orig_hash_lock, flags);
+		return NET_RX_DROP;
+	}
+
+	/* mark broadcast in flood history, update window position
+	 * if required. */
+	if (bit_get_packet(bat_priv, orig_node->mcast_bits, seq_diff, 1))
+		orig_node->last_mcast_seqno = ntohl(mcast_packet->seqno);
+
+	spin_unlock_irqrestore(&bat_priv->orig_hash_lock, flags);
+
 	/* forward multicast packet if necessary */
 	route_mcast_packet(skb, bat_priv);
 
-	ethhdr = (struct ethhdr *)(skb->data + sizeof(struct mcast_packet));
+	ethhdr = (struct ethhdr *)(mcast_packet + 1);
 
 	/* multicast for me? */
 	MC_LIST_LOCK(recv_if->soft_iface, flags);
