@@ -79,6 +79,8 @@ struct orig_node {
 	uint8_t flags;
 	unsigned char *hna_buff;
 	int16_t hna_buff_len;
+	unsigned char *mca_buff;
+	uint8_t num_mca;
 	uint32_t last_real_seqno;
 	uint8_t last_ttl;
 	TYPE_OF_WORD bcast_bits[NUM_WORDS];

@@ -31,7 +31,7 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 				struct batman_if *if_incoming);
 void update_routes(struct bat_priv *bat_priv, struct orig_node *orig_node,
 		   struct neigh_node *neigh_node, unsigned char *hna_buff,
-		   int hna_buff_len);
+		   int hna_buff_len, unsigned char *mca_buff, int num_mca);
 int route_unicast_packet(struct sk_buff *skb, struct batman_if *recv_if,
 			 int hdr_size);
 int recv_icmp_packet(struct sk_buff *skb, struct batman_if *recv_if);
