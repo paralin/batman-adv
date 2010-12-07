@@ -821,6 +821,57 @@ out:
 	rcu_read_unlock();
 }
 
+void purge_mcast_forw_table(struct bat_priv *bat_priv)
+{
+	unsigned long flags;
+	struct mcast_forw_table_entry *table_entry, *tmp_table_entry;
+	struct mcast_forw_orig_entry *orig_entry, *tmp_orig_entry;
+	struct mcast_forw_if_entry *if_entry, *tmp_if_entry;
+	struct mcast_forw_nexthop_entry *nexthop_entry, *tmp_nexthop_entry;
+
+	spin_lock_irqsave(&bat_priv->mcast_forw_table_lock, flags);
+	list_for_each_entry_safe(table_entry, tmp_table_entry,
+				 &bat_priv->mcast_forw_table, list) {
+		list_for_each_entry_safe(orig_entry, tmp_orig_entry,
+					 &table_entry->mcast_orig_list, list) {
+			list_for_each_entry_safe(if_entry, tmp_if_entry,
+					    &orig_entry->mcast_if_list, list) {
+				list_for_each_entry_safe(nexthop_entry,
+						tmp_nexthop_entry,
+						&if_entry->mcast_nexthop_list,
+						list) {
+					if (get_remaining_timeout(
+					    nexthop_entry, bat_priv))
+						continue;
+
+					list_del(&nexthop_entry->list);
+					kfree(nexthop_entry);
+					if_entry->num_nexthops--;
+				}
+
+				if (!list_empty(&if_entry->mcast_nexthop_list))
+					continue;
+
+				list_del(&if_entry->list);
+				kfree(if_entry);
+			}
+
+			if (!list_empty(&orig_entry->mcast_if_list))
+				continue;
+
+			list_del(&orig_entry->list);
+			kfree(orig_entry);
+		}
+
+		if (!list_empty(&table_entry->mcast_orig_list))
+			continue;
+
+		list_del(&table_entry->list);
+		kfree(table_entry);
+	}
+	spin_unlock_irqrestore(&bat_priv->mcast_forw_table_lock, flags);
+}
+
 static void mcast_tracker_timer(struct work_struct *work)
 {
 	struct bat_priv *bat_priv = container_of(work, struct bat_priv,

@@ -30,6 +30,7 @@
 #include "hard-interface.h"
 #include "unicast.h"
 #include "soft-interface.h"
+#include "multicast.h"
 
 static void purge_orig(struct work_struct *work);
 
@@ -311,6 +312,7 @@ static void purge_orig(struct work_struct *work)
 	struct bat_priv *bat_priv =
 		container_of(delayed_work, struct bat_priv, orig_work);
 
+	purge_mcast_forw_table(bat_priv);
 	_purge_orig(bat_priv);
 	start_purge_timer(bat_priv);
 }
