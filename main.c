@@ -32,6 +32,7 @@
 #include "gateway_client.h"
 #include "types.h"
 #include "vis.h"
+#include "multicast.h"
 #include "hash.h"
 
 struct list_head if_list;
@@ -109,6 +110,9 @@ int mesh_init(struct net_device *soft_iface)
 	if (vis_init(bat_priv) < 1)
 		goto err;
 
+	if (mcast_init(bat_priv) < 1)
+		goto err;
+
 	atomic_set(&bat_priv->mesh_state, MESH_ACTIVE);
 	goto end;
 
@@ -139,6 +143,7 @@ void mesh_free(struct net_device *soft_iface)
 	hna_global_free(bat_priv);
 
 	softif_neigh_purge(bat_priv);
+	mcast_free(bat_priv);
 
 	atomic_set(&bat_priv->mesh_state, MESH_INACTIVE);
 }
