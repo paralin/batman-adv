@@ -1059,7 +1059,7 @@ int mcast_forw_table_seq_print_text(struct seq_file *seq, void *offset)
 	return 0;
 }
 
-static void route_mcast_packet(struct sk_buff *skb, struct bat_priv *bat_priv)
+void route_mcast_packet(struct sk_buff *skb, struct bat_priv *bat_priv)
 {
 	struct sk_buff *skb1;
 	struct mcast_packet *mcast_packet;

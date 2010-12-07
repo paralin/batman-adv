@@ -1390,6 +1390,7 @@ int recv_bcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 
 int recv_mcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 {
+	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
 	struct ethhdr *ethhdr;
 	MC_LIST *mc_entry;
 	unsigned long flags;
@@ -1400,6 +1401,9 @@ int recv_mcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	if (check_unicast_packet(skb, hdr_size) < 0 &&
 	    check_broadcast_packet(skb, hdr_size) < 0)
 		return NET_RX_DROP;
+
+	/* forward multicast packet if necessary */
+	route_mcast_packet(skb, bat_priv);
 
 	ethhdr = (struct ethhdr *)(skb->data + sizeof(struct mcast_packet));
 
