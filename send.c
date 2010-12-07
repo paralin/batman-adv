@@ -220,7 +220,6 @@ static void add_own_MCA(struct batman_packet *batman_packet, int num_mca,
 {
 	MC_LIST *mc_list_entry;
 	int num_mca_done = 0;
-	unsigned long flags;
 	char *mca_entry = (char *)(batman_packet + 1);
 
 	if (num_mca == 0)
@@ -234,7 +233,7 @@ static void add_own_MCA(struct batman_packet *batman_packet, int num_mca,
 
 	mca_entry = mca_entry + batman_packet->num_hna * ETH_ALEN;
 
-	MC_LIST_LOCK(soft_iface, flags);
+	MC_LIST_LOCK(soft_iface);
 	netdev_for_each_mc_addr(mc_list_entry, soft_iface) {
 		memcpy(mca_entry, &mc_list_entry->MC_LIST_ADDR, ETH_ALEN);
 		mca_entry += ETH_ALEN;
@@ -244,7 +243,7 @@ static void add_own_MCA(struct batman_packet *batman_packet, int num_mca,
 		if(++num_mca_done == num_mca)
 			break;
 	}
-	MC_LIST_UNLOCK(soft_iface, flags);
+	MC_LIST_UNLOCK(soft_iface);
 
 out:
 	batman_packet->num_mca = num_mca_done;
@@ -254,7 +253,6 @@ static void rebuild_batman_packet(struct bat_priv *bat_priv,
 				  struct batman_if *batman_if)
 {
 	int new_len, mcast_mode, num_mca = 0;
-	unsigned long flags;
 	unsigned char *new_buff = NULL;
 	struct batman_packet *batman_packet;
 
@@ -263,9 +261,9 @@ static void rebuild_batman_packet(struct bat_priv *bat_priv,
 
 	/* Avoid attaching MCAs, if multicast optimization is disabled */
 	if (mcast_mode == MCAST_MODE_PROACT_TRACKING) {
-		MC_LIST_LOCK(batman_if->soft_iface, flags);
+		MC_LIST_LOCK(batman_if->soft_iface);
 		num_mca = netdev_mc_count(batman_if->soft_iface);
-		MC_LIST_UNLOCK(batman_if->soft_iface, flags);
+		MC_LIST_UNLOCK(batman_if->soft_iface);
 	}
 
 	if (atomic_read(&bat_priv->hna_local_changed) ||

@@ -1396,7 +1396,6 @@ int recv_mcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	struct ethhdr *ethhdr;
 	MC_LIST *mc_entry;
 	int32_t seq_diff;
-	unsigned long flags;
 	int ret = 1;
 	int hdr_size = sizeof(struct mcast_packet);
 
@@ -1414,13 +1413,13 @@ int recv_mcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	if (mcast_packet->ttl < 2)
 		return NET_RX_DROP;
 
-	spin_lock_irqsave(&bat_priv->orig_hash_lock, flags);
+	spin_lock_bh(&bat_priv->orig_hash_lock);
 	orig_node = ((struct orig_node *)
 		     hash_find(bat_priv->orig_hash, compare_orig, choose_orig,
 			       mcast_packet->orig));
 
 	if (orig_node == NULL) {
-		spin_unlock_irqrestore(&bat_priv->orig_hash_lock, flags);
+		spin_unlock_bh(&bat_priv->orig_hash_lock);
 		return NET_RX_DROP;
 	}
 
@@ -1428,7 +1427,7 @@ int recv_mcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	if (get_bit_status(orig_node->mcast_bits,
 			   orig_node->last_mcast_seqno,
 			   ntohl(mcast_packet->seqno))) {
-		spin_unlock_irqrestore(&bat_priv->orig_hash_lock, flags);
+		spin_unlock_bh(&bat_priv->orig_hash_lock);
 		return NET_RX_DROP;
 	}
 
@@ -1437,7 +1436,7 @@ int recv_mcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	/* check whether the packet is old and the host just restarted. */
 	if (window_protected(bat_priv, seq_diff,
 			     &orig_node->mcast_seqno_reset)) {
-		spin_unlock_irqrestore(&bat_priv->orig_hash_lock, flags);
+		spin_unlock_bh(&bat_priv->orig_hash_lock);
 		return NET_RX_DROP;
 	}
 
@@ -1446,7 +1445,7 @@ int recv_mcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	if (bit_get_packet(bat_priv, orig_node->mcast_bits, seq_diff, 1))
 		orig_node->last_mcast_seqno = ntohl(mcast_packet->seqno);
 
-	spin_unlock_irqrestore(&bat_priv->orig_hash_lock, flags);
+	spin_unlock_bh(&bat_priv->orig_hash_lock);
 
 	/* forward multicast packet if necessary */
 	route_mcast_packet(skb, bat_priv);
@@ -1454,13 +1453,13 @@ int recv_mcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	ethhdr = (struct ethhdr *)(mcast_packet + 1);
 
 	/* multicast for me? */
-	MC_LIST_LOCK(recv_if->soft_iface, flags);
+	MC_LIST_LOCK(recv_if->soft_iface);
 	netdev_for_each_mc_addr(mc_entry, recv_if->soft_iface) {
 		ret = memcmp(mc_entry->MC_LIST_ADDR, ethhdr->h_dest, ETH_ALEN);
 		if (!ret)
 			break;
 	}
-	MC_LIST_UNLOCK(recv_if->soft_iface, flags);
+	MC_LIST_UNLOCK(recv_if->soft_iface);
 
 	if (!ret)
 		interface_rx(recv_if->soft_iface, skb, recv_if, hdr_size);

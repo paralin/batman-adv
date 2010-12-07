@@ -297,19 +297,19 @@ int bat_seq_printf(struct seq_file *m, const char *f, ...);
  */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 27)
 
-#define MC_LIST_LOCK(soft_iface, flags) \
-		spin_lock_irqsave(&soft_iface->_xmit_lock, flags)
-#define MC_LIST_UNLOCK(soft_iface, flags) \
-		spin_unlock_irqrestore(&soft_iface->_xmit_lock, flags)
+#define MC_LIST_LOCK(soft_iface) \
+		netif_tx_lock_bh(soft_iface)
+#define MC_LIST_UNLOCK(soft_iface) \
+		netif_tx_unlock_bh(soft_iface)
 
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 27) */
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 26)
 
-#define MC_LIST_LOCK(soft_iface, flags) \
-		spin_lock_irqsave(&soft_iface->addr_list_lock, flags)
-#define MC_LIST_UNLOCK(soft_iface, flags) \
-		spin_unlock_irqrestore(&soft_iface->addr_list_lock, flags)
+#define MC_LIST_LOCK(soft_iface) \
+		netif_addr_lock_bh(soft_iface)
+#define MC_LIST_UNLOCK(soft_iface) \
+		netif_addr_unlock_bh(soft_iface)
 
 #endif /* > KERNEL_VERSION(2, 6, 26) */
 

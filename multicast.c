@@ -109,7 +109,6 @@ void mcast_tracker_reset(struct bat_priv *bat_priv)
 
 inline int mcast_may_optimize(uint8_t *dest, struct net_device *soft_iface) {
 	MC_LIST *mc_entry;
-	unsigned long flags;
 	struct bat_priv *bat_priv = netdev_priv(soft_iface);
 	int mcast_mode = atomic_read(&bat_priv->mcast_mode);
 
@@ -119,15 +118,15 @@ inline int mcast_may_optimize(uint8_t *dest, struct net_device *soft_iface) {
 	/* Still allow flooding of multicast packets of protocols where it is
 	 * not easily possible for a multicast sender to be a multicast
 	 * receiver of the same group (for instance IPv6 NDP) */
-	MC_LIST_LOCK(soft_iface, flags);
+	MC_LIST_LOCK(soft_iface);
 	netdev_for_each_mc_addr(mc_entry, soft_iface) {
 		if (memcmp(dest, mc_entry->MC_LIST_ADDR, ETH_ALEN))
 			continue;
 
-		MC_LIST_UNLOCK(soft_iface, flags);
+		MC_LIST_UNLOCK(soft_iface);
 		return 1;
 	}
-	MC_LIST_UNLOCK(soft_iface, flags);
+	MC_LIST_UNLOCK(soft_iface);
 
 	return 0;
 }
@@ -353,13 +352,12 @@ static void update_mcast_forw_table(struct mcast_forw_table_entry *forw_table,
 				    struct bat_priv *bat_priv)
 {
 	struct mcast_forw_table_entry *sync_table_entry, *tmp;
-	unsigned long flags;
 
-	spin_lock_irqsave(&bat_priv->mcast_forw_table_lock, flags);
+	spin_lock_bh(&bat_priv->mcast_forw_table_lock);
 	list_for_each_entry_safe(sync_table_entry, tmp, &forw_table->list,
 				 list)
 		sync_table(sync_table_entry, &bat_priv->mcast_forw_table);
-	spin_unlock_irqrestore(&bat_priv->mcast_forw_table_lock, flags);
+	spin_unlock_bh(&bat_priv->mcast_forw_table_lock);
 }
 
 static inline int find_mca_match(struct orig_node *orig_node,
@@ -403,17 +401,16 @@ static struct mcast_tracker_packet *mcast_proact_tracker_prepare(
 
 	uint8_t *dest_entry;
 	int pos, mca_pos;
-	unsigned long flags;
 	struct mcast_tracker_packet *tracker_packet = NULL;
 	struct mcast_entry *mcast_entry;
 	HASHIT(hashit);
 
 	/* Make a copy so we don't have to rush because of locking */
-	MC_LIST_LOCK(soft_iface, flags);
+	MC_LIST_LOCK(soft_iface);
 	num_mcast_entries = netdev_mc_count(soft_iface);
 	mc_addr_list = kmalloc(ETH_ALEN * num_mcast_entries, GFP_ATOMIC);
 	if (!mc_addr_list) {
-		MC_LIST_UNLOCK(soft_iface, flags);
+		MC_LIST_UNLOCK(soft_iface);
 		goto out;
 	}
 	pos = 0;
@@ -422,7 +419,7 @@ static struct mcast_tracker_packet *mcast_proact_tracker_prepare(
 		       ETH_ALEN);
 		pos++;
 	}
-	MC_LIST_UNLOCK(soft_iface, flags);
+	MC_LIST_UNLOCK(soft_iface);
 
 	if (num_mcast_entries > UINT8_MAX)
 		num_mcast_entries = UINT8_MAX;
@@ -435,7 +432,7 @@ static struct mcast_tracker_packet *mcast_proact_tracker_prepare(
 		INIT_LIST_HEAD(&dest_entries_list[pos]);
 
 	/* fill the lists and buffers */
-	spin_lock_irqsave(&bat_priv->orig_hash_lock, flags);
+	spin_lock_bh(&bat_priv->orig_hash_lock);
 	while (hash_iterate(bat_priv->orig_hash, &hashit)) {
 		bucket = hlist_entry(hashit.walk, struct element_t, hlist);
 		orig_node = bucket->data;
@@ -455,7 +452,7 @@ static struct mcast_tracker_packet *mcast_proact_tracker_prepare(
 			dest_entries_total++;
 		}
 	}
-	spin_unlock_irqrestore(&bat_priv->orig_hash_lock, flags);
+	spin_unlock_bh(&bat_priv->orig_hash_lock);
 
 	/* Any list left empty? */
 	for (pos = 0; pos < num_mcast_entries; pos++)
@@ -539,7 +536,6 @@ static int add_router_of_dest(struct dest_entries_list *next_hops,
 			      struct bat_priv *bat_priv)
 {
 	struct dest_entries_list *next_hop_tmp, *next_hop_entry;
-	unsigned long flags;
 	struct element_t *bucket;
 	struct orig_node *orig_node;
 	HASHIT(hashit);
@@ -550,7 +546,7 @@ static int add_router_of_dest(struct dest_entries_list *next_hops,
 		return 1;
 
 	next_hop_entry->batman_if = NULL;
-	spin_lock_irqsave(&bat_priv->orig_hash_lock, flags);
+	spin_lock_bh(&bat_priv->orig_hash_lock);
 	while (hash_iterate(bat_priv->orig_hash, &hashit)) {
 		bucket = hlist_entry(hashit.walk, struct element_t, hlist);
 		orig_node = bucket->data;
@@ -567,7 +563,7 @@ static int add_router_of_dest(struct dest_entries_list *next_hops,
 		if_num = next_hop_entry->batman_if->if_num;
 		break;
 	}
-	spin_unlock_irqrestore(&bat_priv->orig_hash_lock, flags);
+	spin_unlock_bh(&bat_priv->orig_hash_lock);
 	if (!next_hop_entry->batman_if)
 		goto free;
 
@@ -651,12 +647,11 @@ static void zero_tracker_packet(struct mcast_tracker_packet *tracker_packet,
 	uint8_t *dest_entry;
 	int mcast_num, dest_num;
 
-	unsigned long flags;
 	struct element_t *bucket;
 	struct orig_node *orig_node;
 	HASHIT(hashit);
 
-	spin_lock_irqsave(&bat_priv->orig_hash_lock, flags);
+	spin_lock_bh(&bat_priv->orig_hash_lock);
 	tracker_packet_for_each_dest(mcast_entry, dest_entry,
 				     mcast_num, dest_num, tracker_packet) {
 		while (hash_iterate(bat_priv->orig_hash, &hashit)) {
@@ -685,7 +680,7 @@ static void zero_tracker_packet(struct mcast_tracker_packet *tracker_packet,
 		}
 		HASHIT_RESET(hashit);
 	}
-	spin_unlock_irqrestore(&bat_priv->orig_hash_lock, flags);
+	spin_unlock_bh(&bat_priv->orig_hash_lock);
 }
 
 /* Remove zeroed destination entries and empty multicast entries in tracker
@@ -849,13 +844,12 @@ out:
 
 void purge_mcast_forw_table(struct bat_priv *bat_priv)
 {
-	unsigned long flags;
 	struct mcast_forw_table_entry *table_entry, *tmp_table_entry;
 	struct mcast_forw_orig_entry *orig_entry, *tmp_orig_entry;
 	struct mcast_forw_if_entry *if_entry, *tmp_if_entry;
 	struct mcast_forw_nexthop_entry *nexthop_entry, *tmp_nexthop_entry;
 
-	spin_lock_irqsave(&bat_priv->mcast_forw_table_lock, flags);
+	spin_lock_bh(&bat_priv->mcast_forw_table_lock);
 	list_for_each_entry_safe(table_entry, tmp_table_entry,
 				 &bat_priv->mcast_forw_table, list) {
 		list_for_each_entry_safe(orig_entry, tmp_orig_entry,
@@ -895,7 +889,7 @@ void purge_mcast_forw_table(struct bat_priv *bat_priv)
 		list_del(&table_entry->list);
 		kfree(table_entry);
 	}
-	spin_unlock_irqrestore(&bat_priv->mcast_forw_table_lock, flags);
+	spin_unlock_bh(&bat_priv->mcast_forw_table_lock);
 }
 
 static void mcast_tracker_timer(struct work_struct *work)
@@ -1034,7 +1028,6 @@ int mcast_forw_table_seq_print_text(struct seq_file *seq, void *offset)
 {
 	struct net_device *net_dev = (struct net_device *)seq->private;
 	struct bat_priv *bat_priv = netdev_priv(net_dev);
-	unsigned long flags;
 	struct batman_if *batman_if;
 	struct mcast_forw_table_entry *table_entry;
 	struct mcast_forw_orig_entry *orig_entry;
@@ -1049,7 +1042,7 @@ int mcast_forw_table_seq_print_text(struct seq_file *seq, void *offset)
 			"Outgoing interface\tNexthop - timeout in msecs\n");
 
 	rcu_read_lock();
-	spin_lock_irqsave(&bat_priv->mcast_forw_table_lock, flags);
+	spin_lock_bh(&bat_priv->mcast_forw_table_lock);
 	list_for_each_entry(table_entry, &bat_priv->mcast_forw_table, list) {
 		seq_printf(seq, "%pM\n", table_entry->mcast_addr);
 
@@ -1078,7 +1071,7 @@ int mcast_forw_table_seq_print_text(struct seq_file *seq, void *offset)
 			}
 		}
 	}
-	spin_unlock_irqrestore(&bat_priv->mcast_forw_table_lock, flags);
+	spin_unlock_bh(&bat_priv->mcast_forw_table_lock);
 	rcu_read_unlock();
 
 	return 0;
@@ -1090,7 +1083,6 @@ void route_mcast_packet(struct sk_buff *skb, struct bat_priv *bat_priv)
 	struct mcast_packet *mcast_packet;
 	struct ethhdr *ethhdr;
 	struct batman_if *batman_if;
-	unsigned long flags;
 	struct mcast_forw_table_entry *table_entry;
 	struct mcast_forw_orig_entry *orig_entry;
 	struct mcast_forw_if_entry *if_entry;
@@ -1107,7 +1099,7 @@ void route_mcast_packet(struct sk_buff *skb, struct bat_priv *bat_priv)
 	mcast_packet->ttl--;
 
 	rcu_read_lock();
-	spin_lock_irqsave(&bat_priv->mcast_forw_table_lock, flags);
+	spin_lock_bh(&bat_priv->mcast_forw_table_lock);
 	list_for_each_entry(table_entry, &bat_priv->mcast_forw_table, list) {
 		if (memcmp(ethhdr->h_dest, table_entry->mcast_addr, ETH_ALEN))
 			continue;
@@ -1160,7 +1152,7 @@ void route_mcast_packet(struct sk_buff *skb, struct bat_priv *bat_priv)
 		}
 		break;
 	}
-	spin_unlock_irqrestore(&bat_priv->mcast_forw_table_lock, flags);
+	spin_unlock_bh(&bat_priv->mcast_forw_table_lock);
 
 	list_for_each_entry_safe (dest_entry, tmp, &dest_list.list, list) {
 		if (is_broadcast_ether_addr(dest_entry->dest)) {
