@@ -40,8 +40,16 @@ static uint8_t hop_penalty(const uint8_t tq, struct bat_priv *bat_priv)
 	return (tq * (TQ_MAX_VALUE - hop_penalty)) / (TQ_MAX_VALUE);
 }
 
-/* when do we schedule our own packet to be sent */
-static unsigned long own_send_time(struct bat_priv *bat_priv)
+/* when do we schedule our own neighbor discovery packet to be sent */
+unsigned long own_ndp_send_time(struct batman_if *batman_if)
+{
+	return jiffies + msecs_to_jiffies(
+		   atomic_read(&batman_if->ndp_interval) -
+		   JITTER + (random32() % 2*JITTER));
+}
+
+/* when do we schedule our own originator packet to be sent */
+static unsigned long own_ogm_send_time(struct bat_priv *bat_priv)
 {
 	return jiffies + msecs_to_jiffies(
 		   atomic_read(&bat_priv->orig_interval) -
@@ -243,7 +251,7 @@ static void rebuild_batman_packet_ogm(struct bat_priv *bat_priv,
 	}
 }
 
-void schedule_own_packet(struct batman_if *batman_if)
+void schedule_own_ogm_packet(struct batman_if *batman_if)
 {
 	struct bat_priv *bat_priv = netdev_priv(batman_if->soft_iface);
 	unsigned long send_time;
@@ -296,7 +304,7 @@ void schedule_own_packet(struct batman_if *batman_if)
 	atomic_inc(&batman_if->seqno);
 
 	slide_own_bcast_window(batman_if);
-	send_time = own_send_time(bat_priv);
+	send_time = own_ogm_send_time(bat_priv);
 	add_bat_packet_to_list(bat_priv,
 			       batman_if->packet_buff,
 			       batman_if->packet_len,
@@ -513,7 +521,7 @@ void send_outstanding_bat_packet(struct work_struct *work)
 	 * shutting down
 	 */
 	if (forw_packet->own)
-		schedule_own_packet(forw_packet->if_incoming);
+		schedule_own_ogm_packet(forw_packet->if_incoming);
 
 out:
 	/* don't count own packet */

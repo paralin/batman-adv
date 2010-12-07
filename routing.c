@@ -561,7 +561,7 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 	if (batman_packet_ogm->packet_type != BAT_PACKET_OGM)
 		return;
 
-	/* could be changed by schedule_own_packet() */
+	/* could be changed by schedule_own_ogm_packet() */
 	if_incoming_seqno = atomic_read(&if_incoming->seqno);
 
 	has_directlink_flag = (batman_packet_ogm->flags & DIRECTLINK ? 1 : 0);
