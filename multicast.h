@@ -27,6 +27,7 @@ int mcast_tracker_interval_set(struct net_device *net_dev, char *buff,
 int mcast_tracker_timeout_set(struct net_device *net_dev, char *buff,
 			       size_t count);
 void mcast_tracker_reset(struct bat_priv *bat_priv);
+int mcast_may_optimize(uint8_t *dest, struct net_device *soft_iface);
 void route_mcast_tracker_packet(
 			struct mcast_tracker_packet *tracker_packet,
 			int tracker_packet_len, struct bat_priv *bat_priv);

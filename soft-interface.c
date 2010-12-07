@@ -391,7 +391,7 @@ int interface_tx(struct sk_buff *skb, struct net_device *soft_iface)
 
 		if (is_broadcast_ether_addr(ethhdr->h_dest))
 			bcast_dst = true;
-		else if (atomic_read(&bat_priv->mcast_mode) == MCAST_MODE_PROACT_TRACKING)
+		else if (mcast_may_optimize(ethhdr->h_dest, soft_iface))
 			mcast_dst = true;
 		else
 			bcast_dst = true;

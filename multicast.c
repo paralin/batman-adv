@@ -107,6 +107,31 @@ void mcast_tracker_reset(struct bat_priv *bat_priv)
 	start_mcast_tracker(bat_priv);
 }
 
+inline int mcast_may_optimize(uint8_t *dest, struct net_device *soft_iface) {
+	MC_LIST *mc_entry;
+	unsigned long flags;
+	struct bat_priv *bat_priv = netdev_priv(soft_iface);
+	int mcast_mode = atomic_read(&bat_priv->mcast_mode);
+
+	if (mcast_mode != MCAST_MODE_PROACT_TRACKING)
+		return 0;
+
+	/* Still allow flooding of multicast packets of protocols where it is
+	 * not easily possible for a multicast sender to be a multicast
+	 * receiver of the same group (for instance IPv6 NDP) */
+	MC_LIST_LOCK(soft_iface, flags);
+	netdev_for_each_mc_addr(mc_entry, soft_iface) {
+		if (memcmp(dest, mc_entry->MC_LIST_ADDR, ETH_ALEN))
+			continue;
+
+		MC_LIST_UNLOCK(soft_iface, flags);
+		return 1;
+	}
+	MC_LIST_UNLOCK(soft_iface, flags);
+
+	return 0;
+}
+
 static inline int get_remaining_timeout(
 				struct mcast_forw_nexthop_entry *nexthop_entry,
 				struct bat_priv *bat_priv)
