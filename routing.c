@@ -1388,6 +1388,36 @@ int recv_bcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	return NET_RX_SUCCESS;
 }
 
+int recv_mcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
+{
+	struct ethhdr *ethhdr;
+	MC_LIST *mc_entry;
+	unsigned long flags;
+	int ret = 1;
+	int hdr_size = sizeof(struct mcast_packet);
+
+	/* multicast data packets might be received via unicast or broadcast */
+	if (check_unicast_packet(skb, hdr_size) < 0 &&
+	    check_broadcast_packet(skb, hdr_size) < 0)
+		return NET_RX_DROP;
+
+	ethhdr = (struct ethhdr *)(skb->data + sizeof(struct mcast_packet));
+
+	/* multicast for me? */
+	MC_LIST_LOCK(recv_if->soft_iface, flags);
+	netdev_for_each_mc_addr(mc_entry, recv_if->soft_iface) {
+		ret = memcmp(mc_entry->MC_LIST_ADDR, ethhdr->h_dest, ETH_ALEN);
+		if (!ret)
+			break;
+	}
+	MC_LIST_UNLOCK(recv_if->soft_iface, flags);
+
+	if (!ret)
+		interface_rx(recv_if->soft_iface, skb, recv_if, hdr_size);
+
+	return NET_RX_SUCCESS;
+}
+
 int recv_mcast_tracker_packet(struct sk_buff *skb, struct batman_if *recv_if)
 {
 	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
