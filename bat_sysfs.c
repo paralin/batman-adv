@@ -94,6 +94,33 @@ ssize_t show_##_name(struct kobject *kobj, struct attribute *attr,	\
 	static BAT_ATTR(_name, _mode, show_##_name, store_##_name)
 
 
+#define BAT_ATTR_IF_STORE_UINT(_name, _min, _max, _post_func)		\
+ssize_t store_##_name(struct kobject *kobj, struct attribute *attr,	\
+			     char *buff, size_t count)			\
+{									\
+	struct net_device *net_dev = kobj_to_netdev(kobj);		\
+	struct batman_if *batman_if = get_batman_if_by_netdev(net_dev);	\
+	return __store_uint_attr(buff, count, _min, _max, _post_func,	\
+				 attr, &batman_if->_name, net_dev);	\
+}
+
+#define BAT_ATTR_IF_SHOW_UINT(_name)					\
+ssize_t show_##_name(struct kobject *kobj, struct attribute *attr,	\
+			    char *buff)					\
+{									\
+	struct net_device *net_dev = kobj_to_netdev(kobj);		\
+	struct batman_if *batman_if = get_batman_if_by_netdev(net_dev);	\
+	return sprintf(buff, "%i\n", atomic_read(&batman_if->_name));	\
+}									\
+
+/* Use this, if you are going to set [name] in batman_if to unsigned integer
+ * values only */
+#define BAT_ATTR_IF_UINT(_name, _mode, _min, _max, _post_func)		\
+	static BAT_ATTR_IF_STORE_UINT(_name, _min, _max, _post_func)	\
+	static BAT_ATTR_IF_SHOW_UINT(_name)				\
+	static BAT_ATTR(_name, _mode, show_##_name, store_##_name)
+
+
 static int store_bool_attr(char *buff, size_t count,
 			   struct net_device *net_dev,
 			   char *attr_name, atomic_t *attr)
