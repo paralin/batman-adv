@@ -49,6 +49,7 @@ struct batman_if {
 	struct rcu_head rcu;
 	atomic_t ndp_interval;
 	atomic_t ndp_seqno;
+	struct sk_buff *ndp_skb;
 	struct delayed_work ndp_wq;
 };
 
@@ -122,6 +123,10 @@ struct neigh_node {
 	struct batman_if *if_incoming;
 };
 
+struct neigh_entry {
+	uint8_t addr[ETH_ALEN];
+	uint8_t rq;
+};
 
 struct bat_priv {
 	atomic_t mesh_state;
