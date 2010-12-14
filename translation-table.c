@@ -76,7 +76,7 @@ void hna_local_add(struct net_device *soft_iface, uint8_t *addr)
 	   space in batman_packet->num_hna That also should give a limit to
 	   MAC-flooding. */
 	required_bytes = (bat_priv->num_local_hna + 1) * ETH_ALEN;
-	required_bytes += BAT_PACKET_LEN;
+	required_bytes += BAT_PACKET_OGM_LEN;
 
 	if ((required_bytes > ETH_DATA_LEN) ||
 	    (atomic_read(&bat_priv->aggregated_ogms) &&
