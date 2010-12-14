@@ -184,6 +184,31 @@ static struct neigh_node *ndp_create_neighbor(uint8_t my_tq, uint32_t seqno,
 	return neigh_node;
 }
 
+void ndp_purge_neighbors(void)
+{
+	struct neigh_node *neigh_node, *neigh_node_tmp;
+	struct batman_if *batman_if;
+
+	rcu_read_lock();
+	list_for_each_entry_rcu(batman_if, &if_list, list) {
+		if (batman_if->if_status != IF_ACTIVE)
+			continue;
+
+		spin_lock_bh(&batman_if->neigh_list_lock);
+		list_for_each_entry_safe(neigh_node, neigh_node_tmp,
+					 &batman_if->neigh_list, list) {
+			if (time_before(jiffies,
+			    neigh_node->last_valid + PURGE_TIMEOUT * HZ))
+				continue;
+
+			list_del(&neigh_node->list);
+			kfree(neigh_node);
+		}
+		spin_unlock_bh(&batman_if->neigh_list_lock);
+	}
+	rcu_read_unlock();
+}
+
 int ndp_update_neighbor(uint8_t my_tq, uint32_t seqno,
 			struct batman_if *batman_if, uint8_t *neigh_addr)
 {
