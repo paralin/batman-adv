@@ -360,7 +360,7 @@ int hardif_enable_interface(struct batman_if *batman_if, char *iface_name)
 			batman_if->net_dev->name);
 
 	/* begin scheduling originator messages on that interface */
-	schedule_own_packet(batman_if);
+	schedule_own_ogm_packet(batman_if);
 
 out:
 	return 0;

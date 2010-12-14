@@ -27,7 +27,8 @@
 int send_skb_packet(struct sk_buff *skb,
 				struct batman_if *batman_if,
 				uint8_t *dst_addr);
-void schedule_own_packet(struct batman_if *batman_if);
+unsigned long own_ndp_send_time(struct batman_if *batman_if);
+void schedule_own_ogm_packet(struct batman_if *batman_if);
 void schedule_forward_packet(struct orig_node *orig_node,
 			     struct ethhdr *ethhdr,
 			     struct batman_packet_ogm *batman_packet_ogm,
