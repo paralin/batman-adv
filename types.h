@@ -51,6 +51,8 @@ struct batman_if {
 	atomic_t ndp_seqno;
 	struct sk_buff *ndp_skb;
 	struct delayed_work ndp_wq;
+	struct list_head neigh_list;
+	spinlock_t neigh_list_lock;
 };
 
 /**
@@ -112,6 +114,9 @@ struct neigh_node {
 	struct list_head list;
 	uint8_t addr[ETH_ALEN];
 	uint8_t real_packet_count;
+	uint8_t rq;
+	uint32_t last_rq_seqno;
+	TYPE_OF_WORD rq_real_bits[NUM_WORDS];
 	uint8_t tq_recv[TQ_GLOBAL_WINDOW_SIZE];
 	uint8_t tq_index;
 	uint8_t tq_avg;

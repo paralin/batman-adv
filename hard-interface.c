@@ -608,6 +608,11 @@ int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 	 * the supplied skb. if not, we have to free the skb. */
 
 	switch (batman_packet_ogm->packet_type) {
+		/* batman neighbor discovery protocol packet */
+	case BAT_PACKET_NDP:
+		ret = recv_ndp_packet(skb, batman_if);
+		break;
+
 		/* batman originator packet */
 	case BAT_PACKET_OGM:
 		ret = recv_bat_packet(skb, batman_if);

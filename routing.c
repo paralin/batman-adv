@@ -27,6 +27,7 @@
 #include "hard-interface.h"
 #include "icmp_socket.h"
 #include "translation-table.h"
+#include "ndp.h"
 #include "originator.h"
 #include "types.h"
 #include "ring_buffer.h"
@@ -767,7 +768,46 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 				0, hna_buff_len, if_incoming);
 }
 
-int recv_bat_packet(struct sk_buff *skb, struct batman_if *batman_if)
+int recv_ndp_packet(struct sk_buff *skb, struct batman_if *batman_if)
+{
+	struct ethhdr *ethhdr;
+	struct batman_packet_ndp *packet;
+	int ret;
+	uint8_t my_tq;
+
+	/* keep skb linear */
+	if (skb_linearize(skb) < 0)
+		return NET_RX_DROP;
+
+	/* drop packet if it has not necessary minimum size */
+	if (unlikely(!pskb_may_pull(skb, sizeof(struct batman_packet_ndp))))
+		return NET_RX_DROP;
+
+	ethhdr = (struct ethhdr *)skb_mac_header(skb);
+
+	/* packet with broadcast indication but unicast recipient */
+	if (!is_broadcast_ether_addr(ethhdr->h_dest))
+		return NET_RX_DROP;
+
+	/* packet with broadcast sender address */
+	if (is_broadcast_ether_addr(ethhdr->h_source))
+		return NET_RX_DROP;
+
+	packet = (struct batman_packet_ndp*)(ethhdr + 1);
+
+	my_tq = ndp_fetch_tq(packet, batman_if->net_dev->dev_addr);
+
+	ret = ndp_update_neighbor(my_tq, ntohl(packet->seqno),
+					batman_if, ethhdr->h_source);
+	if (ret)
+		return NET_RX_DROP;
+
+	kfree_skb(skb);
+	return NET_RX_SUCCESS;
+}
+
+int recv_bat_packet(struct sk_buff *skb,
+				struct batman_if *batman_if)
 {
 	struct bat_priv *bat_priv = netdev_priv(batman_if->soft_iface);
 	struct ethhdr *ethhdr;
