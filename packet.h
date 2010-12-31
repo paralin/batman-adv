@@ -24,17 +24,18 @@
 
 #define ETH_P_BATMAN  0x4305	/* unofficial/not registered Ethertype */
 
-#define BAT_PACKET_OGM   0x01
-#define BAT_ICMP         0x02
-#define BAT_UNICAST      0x03
-#define BAT_BCAST        0x04
-#define BAT_VIS          0x05
-#define BAT_UNICAST_FRAG 0x06
-#define BAT_TT_QUERY     0x07
-#define BAT_ROAM_ADV     0x08
+#define BAT_PACKET_NDP   0x01
+#define BAT_PACKET_OGM   0x02
+#define BAT_ICMP         0x03
+#define BAT_UNICAST      0x04
+#define BAT_UNICAST_FRAG 0x05
+#define BAT_BCAST        0x06
+#define BAT_VIS          0x07
+#define BAT_TT_QUERY     0x08
+#define BAT_ROAM_ADV     0x09
 
 /* this file is included by batctl which needs these defines */
-#define COMPAT_VERSION 14
+#define COMPAT_VERSION 15
 #define DIRECTLINK 0x40
 #define VIS_SERVER 0x20
 #define PRIMARIES_FIRST_HOP 0x10
@@ -58,6 +59,16 @@
 #define TT_RESPONSE     0x01
 #define TT_REQUEST      0x02
 #define TT_FULL_TABLE   0x04
+
+/* Neighbor discovery packet */
+struct ndp_packet {
+	uint8_t  packet_type;
+	uint8_t  version;  /* batman version field */
+	uint8_t  orig[6];
+	uint32_t seqno;
+	uint8_t  num_neighbors;
+	uint8_t  align[3];
+} __packed;
 
 /* Originator message packet */
 struct ogm_packet {

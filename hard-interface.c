@@ -354,7 +354,9 @@ int hardif_enable_interface(struct hard_iface *hard_iface,
 
 	atomic_set(&hard_iface->seqno, 1);
 	atomic_set(&hard_iface->frag_seqno, 1);
-	ndp_init(hard_iface);
+	ret = ndp_init(hard_iface);
+	if (ret)
+		goto free;
 
 	bat_info(hard_iface->soft_iface, "Adding interface: %s\n",
 		 hard_iface->net_dev->name);
@@ -392,7 +394,13 @@ int hardif_enable_interface(struct hard_iface *hard_iface,
 
 out:
 	return 0;
+free:
+	dev_remove_pack(&hard_iface->batman_adv_ptype);
 
+	bat_priv->num_ifaces--;
+	orig_hash_del_if(hard_iface, bat_priv->num_ifaces);
+
+	kfree(hard_iface->packet_buff);
 err:
 	hardif_free_ref(hard_iface);
 	return ret;
