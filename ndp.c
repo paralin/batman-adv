@@ -22,6 +22,7 @@
 #include "main.h"
 #include "send.h"
 #include "ndp.h"
+#include "hard-interface.h"
 #include "originator.h"
 
 /* when do we schedule our own neighbor discovery packet to be sent */
@@ -208,6 +209,33 @@ static struct neigh_node *ndp_create_neighbor(uint8_t my_tq, uint32_t seqno,
 	neigh_node->last_rq_seqno = seqno - 1;
 
 	return neigh_node;
+}
+
+void ndp_purge_neighbors(void)
+{
+	struct neigh_node *neigh_node;
+	struct hlist_node *node, *node_tmp;
+	struct batman_if *batman_if;
+
+	rcu_read_lock();
+	list_for_each_entry_rcu(batman_if, &if_list, list) {
+		if (batman_if->if_status != IF_ACTIVE)
+			continue;
+
+		spin_lock_bh(&batman_if->neigh_list_lock);
+		hlist_for_each_entry_safe(neigh_node, node, node_tmp,
+					  &batman_if->neigh_list, list) {
+			if (time_before(jiffies, neigh_node->last_valid +
+					msecs_to_jiffies(PURGE_TIMEOUT *
+							 1000)))
+				continue;
+
+			hlist_del(&neigh_node->list);
+			kfree(neigh_node);
+		}
+		spin_unlock_bh(&batman_if->neigh_list_lock);
+	}
+	rcu_read_unlock();
 }
 
 int ndp_update_neighbor(uint8_t my_tq, uint32_t seqno,
