@@ -24,7 +24,7 @@
 
 #define ETH_P_BATMAN  0x4305	/* unofficial/not registered Ethertype */
 
-#define BAT_PACKET       0x01
+#define BAT_PACKET_OGM   0x01
 #define BAT_ICMP         0x02
 #define BAT_UNICAST      0x03
 #define BAT_BCAST        0x04
@@ -51,7 +51,8 @@
 /* fragmentation defines */
 #define UNI_FRAG_HEAD 0x01
 
-struct batman_packet {
+/* Originator message packet */
+struct ogm_packet {
 	uint8_t  packet_type;
 	uint8_t  version;  /* batman version field */
 	uint8_t  flags;    /* 0x40: DIRECTLINK flag, 0x20 VIS_SERVER flag... */
@@ -65,7 +66,7 @@ struct batman_packet {
 	uint8_t  align;
 } __attribute__((packed));
 
-#define BAT_PACKET_LEN sizeof(struct batman_packet)
+#define BAT_PACKET_OGM_LEN sizeof(struct ogm_packet)
 
 struct icmp_packet {
 	uint8_t  packet_type;
