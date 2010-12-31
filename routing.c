@@ -27,6 +27,7 @@
 #include "hard-interface.h"
 #include "icmp_socket.h"
 #include "translation-table.h"
+#include "ndp.h"
 #include "originator.h"
 #include "ring_buffer.h"
 #include "vis.h"
@@ -859,7 +860,63 @@ out:
 	orig_node_free_ref(orig_node);
 }
 
-int recv_bat_packet(struct sk_buff *skb, struct hard_iface *hard_iface)
+int recv_ndp_packet(struct sk_buff *skb, struct hard_iface *hard_iface)
+{
+	struct bat_priv *bat_priv = netdev_priv(hard_iface->soft_iface);
+	struct hard_iface *primary_if = NULL;
+	struct ethhdr *ethhdr;
+	struct ndp_packet *packet;
+	int ret = NET_RX_DROP;
+	uint8_t my_tq;
+
+	/* keep skb linear */
+	if (skb_linearize(skb) < 0)
+		goto out;
+
+	/* drop packet if it has not necessary minimum size */
+	if (unlikely(!pskb_may_pull(skb, sizeof(struct ndp_packet))))
+		goto out;
+
+	ethhdr = (struct ethhdr *)skb_mac_header(skb);
+
+	/* packet with broadcast indication but unicast recipient */
+	if (!is_broadcast_ether_addr(ethhdr->h_dest))
+		goto out;
+
+	/* packet with broadcast sender address */
+	if (is_broadcast_ether_addr(ethhdr->h_source))
+		goto out;
+
+	packet = (struct ndp_packet *)(ethhdr + 1);
+
+	primary_if = primary_if_get_selected(bat_priv);
+	if (!primary_if)
+		goto out;
+
+	/* our own NDP packet */
+	if (compare_eth(primary_if->net_dev->dev_addr, packet->orig))
+		goto out;
+
+	my_tq = ndp_fetch_tq(packet, hard_iface->net_dev->dev_addr);
+
+	ret = ndp_update_neighbor(my_tq, ntohl(packet->seqno),
+					hard_iface, ethhdr->h_source);
+	if (ret) {
+		ret = NET_RX_DROP;
+		goto out;
+	}
+
+	ret = NET_RX_SUCCESS;
+	dev_kfree_skb(skb);
+
+out:
+	if (primary_if)
+		hardif_free_ref(primary_if);
+	return ret;
+}
+
+int recv_bat_packet(struct sk_buff *skb,
+				struct hard_iface *hard_iface)
 {
 	struct ethhdr *ethhdr;
 

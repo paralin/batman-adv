@@ -27,5 +27,9 @@ void ndp_stop_timer(struct hard_iface *hard_iface);
 
 int ndp_init(struct hard_iface *hard_iface);
 void ndp_free(struct hard_iface *hard_iface);
+uint8_t ndp_fetch_tq(struct ndp_packet *packet,
+		 uint8_t *my_if_addr);
+int ndp_update_neighbor(uint8_t my_tq, uint32_t seqno,
+			struct hard_iface *hard_iface, uint8_t *neigh_addr);
 
 #endif /* _NET_BATMAN_ADV_NDP_H_ */
