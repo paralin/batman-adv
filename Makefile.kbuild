@@ -42,6 +42,7 @@ batman-adv-y += hard-interface.o
 batman-adv-y += hash.o
 batman-adv-y += icmp_socket.o
 batman-adv-y += main.o
+batman-adv-y += ndp.o
 batman-adv-y += originator.o
 batman-adv-y += ring_buffer.o
 batman-adv-y += routing.o

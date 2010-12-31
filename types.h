@@ -47,6 +47,9 @@ struct hard_iface {
 	struct packet_type batman_adv_ptype;
 	struct net_device *soft_iface;
 	struct rcu_head rcu;
+	atomic_t ndp_interval;
+	atomic_t ndp_seqno;
+	struct delayed_work ndp_wq;
 };
 
 /**
