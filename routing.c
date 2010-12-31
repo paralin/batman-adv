@@ -185,9 +185,8 @@ static int is_bidirectional_neigh(struct orig_node *orig_node,
 	struct bat_priv *bat_priv = netdev_priv(if_incoming->soft_iface);
 	struct neigh_node *neigh_node = NULL, *tmp_neigh_node;
 	struct hlist_node *node;
-	unsigned char total_count;
-	uint8_t orig_eq_count, neigh_rq_count, tq_own;
-	int tq_asym_penalty, ret = 0;
+	int tq_asym_penalty;
+	uint8_t local_tq = 0, local_rq = 0;
 
 	/* find corresponding one hop neighbor */
 	rcu_read_lock();
@@ -215,34 +214,30 @@ static int is_bidirectional_neigh(struct orig_node *orig_node,
 					     if_incoming);
 
 	if (!neigh_node)
-		goto out;
+		return 0;
 
 	/* if orig_node is direct neighbour update neigh_node last_valid */
 	if (orig_node == orig_neigh_node)
 		neigh_node->last_valid = jiffies;
 
 	orig_node->last_valid = jiffies;
+	neigh_node_free_ref(neigh_node);
 
-	/* find packet count of corresponding one hop neighbor */
-	spin_lock_bh(&orig_node->ogm_cnt_lock);
-	orig_eq_count = orig_neigh_node->bcast_own_sum[if_incoming->if_num];
-	neigh_rq_count = neigh_node->real_packet_count;
-	spin_unlock_bh(&orig_node->ogm_cnt_lock);
+	spin_lock_bh(&if_incoming->neigh_list_lock);
+	hlist_for_each_entry(neigh_node, node, &if_incoming->neigh_list,
+								list) {
+		if (!compare_eth(neigh_node->addr, orig_neigh_node->orig))
+			continue;
 
-	/* pay attention to not get a value bigger than 100 % */
-	total_count = (orig_eq_count > neigh_rq_count ?
-		       neigh_rq_count : orig_eq_count);
+		orig_node->last_valid = jiffies;
+		local_tq = neigh_node->tq_avg;
+		local_rq = neigh_node->rq;
+		break;
+	}
+	spin_unlock_bh(&if_incoming->neigh_list_lock);
 
-	/* if we have too few packets (too less data) we set tq_own to zero */
-	/* if we receive too few packets it is not considered bidirectional */
-	if ((total_count < TQ_LOCAL_BIDRECT_SEND_MINIMUM) ||
-	    (neigh_rq_count < TQ_LOCAL_BIDRECT_RECV_MINIMUM))
-		tq_own = 0;
-	else
-		/* neigh_node->real_packet_count is never zero as we
-		 * only purge old information when getting new
-		 * information */
-		tq_own = (TQ_MAX_VALUE * total_count) /	neigh_rq_count;
+	if (local_tq == 0)
+		return 0;
 
 	/*
 	 * 1 - ((1-x) ** 3), normalized to TQ_MAX_VALUE this does
@@ -251,33 +246,27 @@ static int is_bidirectional_neigh(struct orig_node *orig_node,
 	 * between 0 and TQ_MAX_VALUE
 	 */
 	tq_asym_penalty = TQ_MAX_VALUE - (TQ_MAX_VALUE *
-				(TQ_LOCAL_WINDOW_SIZE - neigh_rq_count) *
-				(TQ_LOCAL_WINDOW_SIZE - neigh_rq_count) *
-				(TQ_LOCAL_WINDOW_SIZE - neigh_rq_count)) /
-					(TQ_LOCAL_WINDOW_SIZE *
-					 TQ_LOCAL_WINDOW_SIZE *
-					 TQ_LOCAL_WINDOW_SIZE);
+				(TQ_MAX_VALUE - local_rq) *
+				(TQ_MAX_VALUE - local_rq) *
+				(TQ_MAX_VALUE - local_rq)) /
+				(TQ_MAX_VALUE * TQ_MAX_VALUE * TQ_MAX_VALUE);
 
-	ogm_packet->tq = ((ogm_packet->tq * tq_own * tq_asym_penalty) /
-						(TQ_MAX_VALUE * TQ_MAX_VALUE));
+	ogm_packet->tq = ((ogm_packet->tq * local_tq * tq_asym_penalty) /
+			   (TQ_MAX_VALUE * TQ_MAX_VALUE));
 
 	bat_dbg(DBG_BATMAN, bat_priv,
 		"bidirectional: "
-		"orig = %-15pM neigh = %-15pM => own_bcast = %2i, "
-		"real recv = %2i, local tq: %3i, asym_penalty: %3i, "
-		"total tq: %3i\n",
-		orig_node->orig, orig_neigh_node->orig, total_count,
-		neigh_rq_count, tq_own, tq_asym_penalty, ogm_packet->tq);
+		"orig = %-15pM neigh = %-15pM => local tq = %3i, "
+		"local rq: %3i, asym_penalty: %3i, total tq: %3i\n",
+		orig_node->orig, orig_neigh_node->orig, local_tq, local_rq,
+		tq_asym_penalty, ogm_packet->tq);
 
 	/* if link has the minimum required transmission quality
 	 * consider it bidirectional */
 	if (ogm_packet->tq >= TQ_TOTAL_BIDRECT_LIMIT)
-		ret = 1;
+		return 1;
 
-out:
-	if (neigh_node)
-		neigh_node_free_ref(neigh_node);
-	return ret;
+	return 0;
 }
 
 /* caller must hold the neigh_list_lock */
