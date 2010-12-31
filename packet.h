@@ -24,7 +24,7 @@
 
 #define ETH_P_BATMAN  0x4305	/* unofficial/not registered Ethertype */
 
-#define BAT_PACKET       0x01
+#define BAT_PACKET_OGM   0x01
 #define BAT_ICMP         0x02
 #define BAT_UNICAST      0x03
 #define BAT_BCAST        0x04
@@ -59,7 +59,8 @@
 #define TT_REQUEST      0x02
 #define TT_FULL_TABLE   0x04
 
-struct batman_packet {
+/* Originator message packet */
+struct ogm_packet {
 	uint8_t  packet_type;
 	uint8_t  version;  /* batman version field */
 	uint8_t  ttl;
@@ -74,7 +75,7 @@ struct batman_packet {
 	uint16_t tt_crc;
 } __packed;
 
-#define BAT_PACKET_LEN sizeof(struct batman_packet)
+#define BAT_PACKET_OGM_LEN sizeof(struct ogm_packet)
 
 struct icmp_packet {
 	uint8_t  packet_type;
