@@ -20,6 +20,7 @@
  */
 
 #include "main.h"
+#include "ndp.h"
 #include "originator.h"
 #include "hash.h"
 #include "translation-table.h"
@@ -383,6 +384,7 @@ static void purge_orig(struct work_struct *work)
 		container_of(delayed_work, struct bat_priv, orig_work);
 
 	_purge_orig(bat_priv);
+	ndp_purge_neighbors();
 	start_purge_timer(bat_priv);
 }
 
