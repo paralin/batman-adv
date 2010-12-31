@@ -51,6 +51,8 @@ struct batman_if {
 	atomic_t ndp_seqno;
 	struct sk_buff *ndp_skb;
 	struct delayed_work ndp_wq;
+	struct hlist_head neigh_list;
+	spinlock_t neigh_list_lock;
 };
 
 /**
@@ -113,6 +115,9 @@ struct neigh_node {
 	struct hlist_node list;
 	uint8_t addr[ETH_ALEN];
 	uint8_t real_packet_count;
+	uint8_t rq;
+	uint32_t last_rq_seqno;
+	unsigned long ndp_rq_window[NUM_WORDS];
 	uint8_t tq_recv[TQ_GLOBAL_WINDOW_SIZE];
 	uint8_t tq_index;
 	uint8_t tq_avg;
@@ -126,6 +131,11 @@ struct neigh_node {
 	struct batman_if *if_incoming;
 };
 
+struct neigh_entry {
+	uint8_t addr[ETH_ALEN];
+	uint8_t rq;
+	uint8_t align;
+} __attribute__((packed));
 
 struct bat_priv {
 	atomic_t mesh_state;
