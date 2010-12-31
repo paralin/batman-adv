@@ -286,3 +286,63 @@ ret:
 	spin_unlock_bh(&batman_if->neigh_list_lock);
 	return ret;
 }
+
+int ndp_seq_print_text(struct seq_file *seq, void *offset)
+{
+	struct neigh_node *neigh_node;
+	struct batman_if *batman_if;
+	struct hlist_node *node;
+	int last_seen_secs;
+	int last_seen_msecs;
+	int batman_count = 0;
+	struct net_device *net_dev = (struct net_device *)seq->private;
+	struct bat_priv *bat_priv = netdev_priv(net_dev);
+
+	if ((!bat_priv->primary_if) ||
+	    (bat_priv->primary_if->if_status != IF_ACTIVE)) {
+		if (!bat_priv->primary_if)
+			return seq_printf(seq, "BATMAN mesh %s disabled - "
+				    "please specify interfaces to enable it\n",
+				    net_dev->name);
+
+		return seq_printf(seq, "BATMAN mesh %s "
+				  "disabled - primary interface not active\n",
+				  net_dev->name);
+	}
+
+	seq_printf(seq, "[B.A.T.M.A.N. adv %s%s, MainIF/MAC: %s/%pM (%s)]\n",
+		   SOURCE_VERSION, REVISION_VERSION_STR,
+		   bat_priv->primary_if->net_dev->name,
+		   bat_priv->primary_if->net_dev->dev_addr, net_dev->name);
+	seq_printf(seq, "  %-15s %s (%s/%i) [%10s]\n",
+		   "Neighbor", "last-seen", "#TQ,#RQ", TQ_MAX_VALUE, "IF");
+
+	rcu_read_lock();
+	list_for_each_entry_rcu(batman_if, &if_list, list) {
+		if (batman_if->if_status != IF_ACTIVE)
+			continue;
+
+		spin_lock_bh(&batman_if->neigh_list_lock);
+		hlist_for_each_entry(neigh_node, node, &batman_if->neigh_list,
+				    list) {
+			last_seen_secs = jiffies_to_msecs(jiffies -
+						neigh_node->last_valid) / 1000;
+			last_seen_msecs = jiffies_to_msecs(jiffies -
+						neigh_node->last_valid) % 1000;
+
+			seq_printf(seq, "%pM %4i.%03is     (%3i,%3i) [%10s]\n",
+				   neigh_node->addr, last_seen_secs,
+				   last_seen_msecs, neigh_node->tq_avg,
+				   neigh_node->rq, batman_if->net_dev->name);
+
+			batman_count++;
+		}
+		spin_unlock_bh(&batman_if->neigh_list_lock);
+	}
+	rcu_read_unlock();
+
+	if ((batman_count == 0))
+		seq_printf(seq, "No batman nodes in range ...\n");
+
+	return 0;
+}
