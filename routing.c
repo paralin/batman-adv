@@ -152,7 +152,7 @@ static int is_bidirectional_neigh(struct orig_node *orig_node,
 	struct bat_priv *bat_priv = netdev_priv(if_incoming->soft_iface);
 	struct neigh_node *neigh_node = NULL, *tmp_neigh_node = NULL;
 	struct hlist_node *node;
-	unsigned char total_count;
+	uint8_t local_tq = 0, local_rq = 0;
 
 	if (orig_node == orig_neigh_node) {
 		rcu_read_lock();
@@ -199,25 +199,23 @@ static int is_bidirectional_neigh(struct orig_node *orig_node,
 			return 0;
 	}
 
-	orig_node->last_valid = jiffies;
+	/* note, bottom halves are already deactivated outside in
+	 * recv_bat_packet() */
+	spin_lock(&if_incoming->neigh_list_lock);
+	hlist_for_each_entry(neigh_node, node, &if_incoming->neigh_list,
+								list) {
+		if (!compare_orig(neigh_node->addr, orig_neigh_node->orig))
+			continue;
 
-	/* pay attention to not get a value bigger than 100 % */
-	total_count = (orig_neigh_node->bcast_own_sum[if_incoming->if_num] >
-		       neigh_node->real_packet_count ?
-		       neigh_node->real_packet_count :
-		       orig_neigh_node->bcast_own_sum[if_incoming->if_num]);
+		orig_node->last_valid = jiffies;
+		local_tq = neigh_node->tq_avg;
+		local_rq = neigh_node->rq;
+		break;
+	}
+	spin_unlock(&if_incoming->neigh_list_lock);
 
-	/* if we have too few packets (too less data) we set tq_own to zero */
-	/* if we receive too few packets it is not considered bidirectional */
-	if ((total_count < TQ_LOCAL_BIDRECT_SEND_MINIMUM) ||
-	    (neigh_node->real_packet_count < TQ_LOCAL_BIDRECT_RECV_MINIMUM))
-		orig_neigh_node->tq_own = 0;
-	else
-		/* neigh_node->real_packet_count is never zero as we
-		 * only purge old information when getting new
-		 * information */
-		orig_neigh_node->tq_own = (TQ_MAX_VALUE * total_count) /
-			neigh_node->real_packet_count;
+	if (local_tq == 0)
+		return 0;
 
 	/*
 	 * 1 - ((1-x) ** 3), normalized to TQ_MAX_VALUE this does
@@ -228,25 +226,22 @@ static int is_bidirectional_neigh(struct orig_node *orig_node,
 	orig_neigh_node->tq_asym_penalty =
 		TQ_MAX_VALUE -
 		(TQ_MAX_VALUE *
-		 (TQ_LOCAL_WINDOW_SIZE - neigh_node->real_packet_count) *
-		 (TQ_LOCAL_WINDOW_SIZE - neigh_node->real_packet_count) *
-		 (TQ_LOCAL_WINDOW_SIZE - neigh_node->real_packet_count)) /
-		(TQ_LOCAL_WINDOW_SIZE *
-		 TQ_LOCAL_WINDOW_SIZE *
-		 TQ_LOCAL_WINDOW_SIZE);
+		 (TQ_MAX_VALUE - local_rq) *
+		 (TQ_MAX_VALUE - local_rq) *
+		 (TQ_MAX_VALUE - local_rq)) /
+		(TQ_MAX_VALUE *
+		 TQ_MAX_VALUE *
+		 TQ_MAX_VALUE);
 
-	ogm_packet->tq = ((ogm_packet->tq *
-			      orig_neigh_node->tq_own *
-			      orig_neigh_node->tq_asym_penalty) /
-			     (TQ_MAX_VALUE * TQ_MAX_VALUE));
+	ogm_packet->tq = ((ogm_packet->tq * local_tq *
+			   orig_neigh_node->tq_asym_penalty) /
+			   (TQ_MAX_VALUE * TQ_MAX_VALUE));
 
 	bat_dbg(DBG_BATMAN, bat_priv,
 		"bidirectional: "
-		"orig = %-15pM neigh = %-15pM => own_bcast = %2i, "
-		"real recv = %2i, local tq: %3i, asym_penalty: %3i, "
-		"total tq: %3i\n",
-		orig_node->orig, orig_neigh_node->orig, total_count,
-		neigh_node->real_packet_count, orig_neigh_node->tq_own,
+		"orig = %-15pM neigh = %-15pM => local tq = %3i, "
+		"local rq: %3i, asym_penalty: %3i, total tq: %3i\n",
+		orig_node->orig, orig_neigh_node->orig, local_tq, local_rq,
 		orig_neigh_node->tq_asym_penalty, ogm_packet->tq);
 
 	/* if link has the minimum required transmission quality
@@ -859,6 +854,7 @@ int recv_bat_packet(struct sk_buff *skb,
 
 	ethhdr = (struct ethhdr *)skb_mac_header(skb);
 
+	/* note, is_bidirectional_neigh() relies on deactivated bottom halves */
 	spin_lock_bh(&bat_priv->orig_hash_lock);
 	receive_aggr_bat_packet(ethhdr,
 				skb->data,
