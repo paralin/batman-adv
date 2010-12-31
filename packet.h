@@ -24,12 +24,13 @@
 
 #define ETH_P_BATMAN  0x4305	/* unofficial/not registered Ethertype */
 
-#define BAT_PACKET_OGM   0x01
-#define BAT_ICMP         0x02
-#define BAT_UNICAST      0x03
-#define BAT_BCAST        0x04
-#define BAT_VIS          0x05
-#define BAT_UNICAST_FRAG 0x06
+#define BAT_PACKET_NDP   0x01
+#define BAT_PACKET_OGM   0x02
+#define BAT_ICMP         0x03
+#define BAT_UNICAST      0x04
+#define BAT_UNICAST_FRAG 0x05
+#define BAT_BCAST        0x06
+#define BAT_VIS          0x07
 
 /* this file is included by batctl which needs these defines */
 #define COMPAT_VERSION 12
@@ -50,6 +51,16 @@
 
 /* fragmentation defines */
 #define UNI_FRAG_HEAD 0x01
+
+/* Neighbor discovery packet */
+struct batman_packet_ndp {
+	uint8_t  packet_type;
+	uint8_t  version;  /* batman version field */
+	uint8_t  orig[6];
+	uint32_t seqno;
+	uint8_t  num_neighbors;
+	uint8_t  align[3];
+} __attribute__((packed));
 
 /* Originator message packet */
 struct ogm_packet {

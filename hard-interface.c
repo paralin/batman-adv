@@ -284,6 +284,7 @@ int hardif_enable_interface(struct batman_if *batman_if, char *iface_name)
 {
 	struct bat_priv *bat_priv;
 	struct ogm_packet *ogm_packet;
+	int ret;
 
 	if (batman_if->if_status != IF_NOT_IN_USE)
 		goto out;
@@ -331,7 +332,9 @@ int hardif_enable_interface(struct batman_if *batman_if, char *iface_name)
 
 	atomic_set(&batman_if->seqno, 1);
 	atomic_set(&batman_if->frag_seqno, 1);
-	ndp_init(batman_if);
+	ret = ndp_init(batman_if);
+	if (ret)
+		goto free;
 
 	bat_info(batman_if->soft_iface, "Adding interface: %s\n",
 		 batman_if->net_dev->name);
@@ -369,7 +372,14 @@ int hardif_enable_interface(struct batman_if *batman_if, char *iface_name)
 
 out:
 	return 0;
+free:
+	dev_remove_pack(&batman_if->batman_adv_ptype);
+	kref_put(&batman_if->refcount, hardif_free_ref);
 
+	bat_priv->num_ifaces--;
+	orig_hash_del_if(batman_if, bat_priv->num_ifaces);
+
+	kfree(batman_if->packet_buff);
 err:
 	return -ENOMEM;
 }

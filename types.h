@@ -49,6 +49,7 @@ struct batman_if {
 	struct rcu_head rcu;
 	atomic_t ndp_interval;
 	atomic_t ndp_seqno;
+	struct sk_buff *ndp_skb;
 	struct delayed_work ndp_wq;
 };
 
