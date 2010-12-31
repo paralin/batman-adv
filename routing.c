@@ -199,20 +199,24 @@ static int is_bidirectional_neigh(struct orig_node *orig_node,
 			return 0;
 	}
 
-	/* note, bottom halves are already deactivated outside in
-	 * recv_bat_packet() */
-	spin_lock(&if_incoming->neigh_list_lock);
-	hlist_for_each_entry(neigh_node, node, &if_incoming->neigh_list,
+	rcu_read_lock();
+	hlist_for_each_entry_rcu(neigh_node, node, &if_incoming->neigh_list,
 								list) {
 		if (!compare_orig(neigh_node->addr, orig_neigh_node->orig))
 			continue;
 
 		orig_node->last_valid = jiffies;
+
+		/* note, bottom halves are already deactivated outside in
+		 * recv_bat_packet() */
+		spin_lock(&neigh_node->update_lock);
 		local_tq = neigh_node->tq_avg;
 		local_rq = neigh_node->rq;
+		spin_unlock(&neigh_node->update_lock);
+
 		break;
 	}
-	spin_unlock(&if_incoming->neigh_list_lock);
+	rcu_read_unlock();
 
 	if (local_tq == 0)
 		return 0;

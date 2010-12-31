@@ -68,7 +68,7 @@ void neigh_node_free_ref(struct kref *refcount)
 	kfree(neigh_node);
 }
 
-static void neigh_node_free_rcu(struct rcu_head *rcu)
+void neigh_node_free_rcu(struct rcu_head *rcu)
 {
 	struct neigh_node *neigh_node;
 

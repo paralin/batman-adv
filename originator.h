@@ -31,6 +31,7 @@ struct neigh_node *create_neighbor(struct orig_node *orig_node,
 				   uint8_t *neigh,
 				   struct batman_if *if_incoming);
 void neigh_node_free_ref(struct kref *refcount);
+void neigh_node_free_rcu(struct rcu_head *rcu);
 int orig_seq_print_text(struct seq_file *seq, void *offset);
 int orig_hash_add_if(struct batman_if *batman_if, int max_if_num);
 int orig_hash_del_if(struct batman_if *batman_if, int max_if_num);
