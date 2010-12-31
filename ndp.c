@@ -22,6 +22,7 @@
 #include "main.h"
 #include "send.h"
 #include "ndp.h"
+#include "originator.h"
 
 /* when do we schedule our own neighbor discovery packet to be sent */
 static unsigned long own_ndp_send_time(struct batman_if *batman_if)
@@ -50,6 +51,10 @@ static void ndp_send(struct work_struct *work)
 							ndp_wq.work);
 	struct bat_priv *bat_priv = netdev_priv(batman_if->soft_iface);
 	struct batman_packet_ndp *ndp_packet;
+	struct neigh_entry *neigh_entry;
+	struct neigh_node *neigh_node;
+	struct hlist_node *node;
+	int entries_len = 0;
 	struct sk_buff *skb;
 
 	skb = skb_copy(batman_if->ndp_skb, GFP_ATOMIC);
@@ -58,6 +63,22 @@ static void ndp_send(struct work_struct *work)
 	ndp_packet->num_neighbors = 0;
 	memcpy(ndp_packet->orig, bat_priv->primary_if->net_dev->dev_addr,
 	       ETH_ALEN);
+
+	neigh_entry = (struct neigh_entry *)(ndp_packet + 1);
+	spin_lock_bh(&batman_if->neigh_list_lock);
+	hlist_for_each_entry(neigh_node, node, &batman_if->neigh_list, list) {
+		if (entries_len + sizeof(struct neigh_entry) >
+		    skb_tailroom(skb))
+			break;
+
+		memcpy(neigh_entry->addr, neigh_node->addr, ETH_ALEN);
+		neigh_entry->rq = neigh_node->rq;
+		ndp_packet->num_neighbors++;
+		neigh_entry++;
+		entries_len += sizeof(struct neigh_entry);
+	}
+	spin_unlock_bh(&batman_if->neigh_list_lock);
+	skb_put(skb, entries_len);
 
 	bat_dbg(DBG_BATMAN, bat_priv,
 		"batman-adv:Sending ndp packet on interface %s, seqno %d\n",
@@ -90,6 +111,9 @@ int ndp_init(struct batman_if *batman_if)
 	ndp_packet->packet_type = BAT_PACKET_NDP;
 	ndp_packet->version = COMPAT_VERSION;
 
+	INIT_HLIST_HEAD(&batman_if->neigh_list);
+	spin_lock_init(&batman_if->neigh_list_lock);
+
 	INIT_DELAYED_WORK(&batman_if->ndp_wq, ndp_send);
 
 	return 0;
@@ -101,4 +125,125 @@ void ndp_free(struct batman_if *batman_if)
 {
 	ndp_stop_timer(batman_if);
 	dev_kfree_skb(batman_if->ndp_skb);
+}
+
+/* extract my own tq to neighbor from the ndp packet */
+uint8_t ndp_fetch_tq(struct batman_packet_ndp *packet,
+			 uint8_t *my_if_addr)
+{
+	struct neigh_entry *neigh_entry = (struct neigh_entry *)(packet + 1);
+	uint8_t tq = 0;
+	int i;
+
+	for (i = 0; i < packet->num_neighbors; i++) {
+		if (compare_orig(my_if_addr, neigh_entry->addr)) {
+			tq = neigh_entry->rq;
+			break;
+		}
+		neigh_entry++;
+	}
+	return tq;
+}
+
+static void ndp_update_neighbor_lq(uint8_t tq, uint32_t seqno,
+				   struct neigh_node *neigh_node,
+				   struct bat_priv *bat_priv)
+{
+	char is_duplicate = 0;
+	int32_t seq_diff;
+	int need_update = 0;
+
+	seq_diff = seqno - neigh_node->last_rq_seqno;
+
+	is_duplicate |= get_bit_status(neigh_node->ndp_rq_window,
+				       neigh_node->last_rq_seqno,
+				       seqno);
+
+	/* if the window moved, set the update flag. */
+	need_update |= bit_get_packet(bat_priv, neigh_node->ndp_rq_window,
+				      seq_diff, 1);
+	/* TODO: rename TQ_LOCAL_WINDOW_SIZE to RQ_LOCAL... */
+	neigh_node->rq =
+		(bit_packet_count(neigh_node->ndp_rq_window) * TQ_MAX_VALUE)
+			/ TQ_LOCAL_WINDOW_SIZE;
+
+	if (need_update) {
+		bat_dbg(DBG_BATMAN, bat_priv, "batman-adv: ndp: "
+			"updating last_seqno of neighbor %pM: old %d, new %d\n",
+			neigh_node->addr, neigh_node->last_rq_seqno, seqno);
+		/* TODO: this is not really an average here,
+		   need to change the variable name later */
+		neigh_node->tq_avg = tq;
+		neigh_node->last_valid = jiffies;
+		neigh_node->last_rq_seqno = seqno;
+	}
+
+	if (is_duplicate)
+		bat_dbg(DBG_BATMAN, bat_priv,
+			"seqno %d of neighbor %pM was a duplicate!\n",
+			seqno, neigh_node->addr);
+
+	bat_dbg(DBG_BATMAN, bat_priv, "batman-adv: ndp: "
+		"new rq/tq of neighbor %pM: rq %d, tq %d\n",
+		neigh_node->addr, neigh_node->rq, neigh_node->tq_avg);
+}
+
+static struct neigh_node *ndp_create_neighbor(uint8_t my_tq, uint32_t seqno,
+					      uint8_t *neigh_addr,
+					      struct bat_priv *bat_priv)
+{
+	struct neigh_node *neigh_node;
+
+	bat_dbg(DBG_BATMAN, bat_priv,
+		"batman-adv: ndp: Creating new neighbor %pM, "
+		"initial tq %d, initial seqno %d\n",
+		neigh_addr, my_tq, seqno);
+
+	neigh_node = kzalloc(sizeof(struct neigh_node), GFP_ATOMIC);
+	if (!neigh_node)
+		return NULL;
+
+	INIT_HLIST_NODE(&neigh_node->list);
+	memcpy(neigh_node->addr, neigh_addr, ETH_ALEN);
+	neigh_node->last_rq_seqno = seqno - 1;
+
+	return neigh_node;
+}
+
+int ndp_update_neighbor(uint8_t my_tq, uint32_t seqno,
+			struct batman_if *batman_if, uint8_t *neigh_addr)
+{
+	struct bat_priv *bat_priv = netdev_priv(batman_if->soft_iface);
+	struct neigh_node *neigh_node = NULL, *tmp_neigh_node;
+	struct hlist_node *node;
+	int ret = 1;
+
+	spin_lock_bh(&batman_if->neigh_list_lock);
+	/* old neighbor? */
+	hlist_for_each_entry(tmp_neigh_node, node, &batman_if->neigh_list,
+			     list) {
+		if (!compare_orig(tmp_neigh_node->addr, neigh_addr))
+			continue;
+
+		neigh_node = tmp_neigh_node;
+		break;
+	}
+
+	/* new neighbor? */
+	if (!neigh_node) {
+		neigh_node = ndp_create_neighbor(my_tq, seqno, neigh_addr,
+						 bat_priv);
+		if (!neigh_node)
+			goto ret;
+
+		hlist_add_head(&neigh_node->list, &batman_if->neigh_list);
+	}
+
+	ndp_update_neighbor_lq(my_tq, seqno, neigh_node, bat_priv);
+
+	ret = 0;
+
+ret:
+	spin_unlock_bh(&batman_if->neigh_list_lock);
+	return ret;
 }
