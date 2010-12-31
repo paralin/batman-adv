@@ -26,6 +26,7 @@
 #include "translation-table.h"
 #include "routing.h"
 #include "bat_sysfs.h"
+#include "ndp.h"
 #include "originator.h"
 #include "hash.h"
 
@@ -260,6 +261,7 @@ static void hardif_activate_interface(struct batman_if *batman_if)
 		 batman_if->net_dev->name);
 
 	update_min_mtu(batman_if->soft_iface);
+	ndp_start_timer(batman_if);
 	return;
 }
 
@@ -274,6 +276,7 @@ static void hardif_deactivate_interface(struct batman_if *batman_if)
 	bat_info(batman_if->soft_iface, "Interface deactivated: %s\n",
 		 batman_if->net_dev->name);
 
+	ndp_stop_timer(batman_if);
 	update_min_mtu(batman_if->soft_iface);
 }
 
@@ -328,6 +331,8 @@ int hardif_enable_interface(struct batman_if *batman_if, char *iface_name)
 
 	atomic_set(&batman_if->seqno, 1);
 	atomic_set(&batman_if->frag_seqno, 1);
+	ndp_init(batman_if);
+
 	bat_info(batman_if->soft_iface, "Adding interface: %s\n",
 		 batman_if->net_dev->name);
 
@@ -381,6 +386,7 @@ void hardif_disable_interface(struct batman_if *batman_if)
 
 	bat_info(batman_if->soft_iface, "Removing interface: %s\n",
 		 batman_if->net_dev->name);
+	ndp_free(batman_if);
 	dev_remove_pack(&batman_if->batman_adv_ptype);
 	kref_put(&batman_if->refcount, hardif_free_ref);
 
@@ -434,6 +440,9 @@ static struct batman_if *hardif_add_interface(struct net_device *net_dev)
 	ret = sysfs_add_hardif(&batman_if->hardif_obj, net_dev);
 	if (ret)
 		goto free_if;
+
+	atomic_set(&batman_if->ndp_interval, 500);
+	atomic_set(&batman_if->ndp_seqno, 0);
 
 	batman_if->if_num = -1;
 	batman_if->net_dev = net_dev;
