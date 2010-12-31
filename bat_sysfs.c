@@ -588,10 +588,12 @@ static ssize_t show_iface_status(struct kobject *kobj, struct attribute *attr,
 static BAT_ATTR(mesh_iface, S_IRUGO | S_IWUSR,
 		show_mesh_iface, store_mesh_iface);
 static BAT_ATTR(iface_status, S_IRUGO, show_iface_status, NULL);
+BAT_ATTR_IF_UINT(ndp_interval, S_IRUGO | S_IWUSR, 2 * JITTER, INT_MAX, NULL);
 
 static struct bat_attribute *batman_attrs[] = {
 	&bat_attr_mesh_iface,
 	&bat_attr_iface_status,
+	&bat_attr_ndp_interval,
 	NULL,
 };
 
