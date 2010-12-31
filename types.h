@@ -151,6 +151,8 @@ struct neigh_node {
 	struct orig_node *orig_node;
 	struct hard_iface *if_incoming;
 	spinlock_t tq_lock;	/* protects: tq_recv, tq_index */
+	spinlock_t update_lock;	/* protects last_rq_seqno, ndp_rq_window, rq,
+				   last_valid, tq_avg for NDP */
 };
 
 struct neigh_entry {
