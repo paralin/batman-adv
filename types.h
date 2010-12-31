@@ -129,6 +129,8 @@ struct neigh_node {
 	struct rcu_head rcu;
 	struct orig_node *orig_node;
 	struct batman_if *if_incoming;
+	spinlock_t update_lock;	/* protects last_rq_seqno, ndp_rq_window, rq,
+				   last_valid, tq_avg for NDP */
 };
 
 struct neigh_entry {
