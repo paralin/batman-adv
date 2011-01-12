@@ -12,3 +12,10 @@ Date:           May 2010
 Contact:        Marek Lindner <lindner_marek@yahoo.de>
 Description:
                 Indicates the status of <iface> as it is seen by batman.
+
+What:           /sys/class/net/<mesh_iface>/batman-adv/ndp_interval
+Date:           Jan 2011
+Contact:        Linus Lüssing <linus.luessing@web.de>
+Description:
+                Defines the interval in milliseconds in which batman
+                sends its probing packets for link quality measurements.
