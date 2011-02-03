@@ -206,10 +206,10 @@ static void softif_batman_recv(struct sk_buff *skb, struct net_device *dev,
 	else
 		batman_packet = (struct batman_packet *)(skb->data + ETH_HLEN);
 
-	if (batman_packet->version != COMPAT_VERSION)
+	if (batman_packet->header.version != COMPAT_VERSION)
 		goto err;
 
-	if (batman_packet->packet_type != BAT_PACKET)
+	if (batman_packet->header.packet_type != BAT_PACKET)
 		goto err;
 
 	if (!(batman_packet->flags & PRIMARIES_FIRST_HOP))
@@ -373,11 +373,11 @@ int interface_tx(struct sk_buff *skb, struct net_device *soft_iface)
 			goto dropped;
 
 		bcast_packet = (struct bcast_packet *)skb->data;
-		bcast_packet->version = COMPAT_VERSION;
-		bcast_packet->ttl = TTL;
+		bcast_packet->header.version = COMPAT_VERSION;
+		bcast_packet->header.ttl = TTL;
 
 		/* batman packet type: broadcast */
-		bcast_packet->packet_type = BAT_BCAST;
+		bcast_packet->header.packet_type = BAT_BCAST;
 
 		/* hw address of first interface is the orig mac because only
 		 * this mac is known throughout the mesh */
@@ -454,8 +454,8 @@ void interface_rx(struct net_device *soft_iface,
 		skb_push(skb, hdr_size);
 		unicast_packet = (struct unicast_packet *)skb->data;
 
-		if ((unicast_packet->packet_type != BAT_UNICAST) &&
-		    (unicast_packet->packet_type != BAT_UNICAST_FRAG))
+		if ((unicast_packet->header.packet_type != BAT_UNICAST) &&
+		    (unicast_packet->header.packet_type != BAT_UNICAST_FRAG))
 			goto dropped;
 
 		skb_reset_mac_header(skb);

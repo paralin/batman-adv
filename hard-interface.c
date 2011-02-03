@@ -146,8 +146,8 @@ static void set_primary_if(struct bat_priv *bat_priv,
 		return;
 
 	batman_packet = (struct batman_packet *)(hard_iface->packet_buff);
+	batman_packet->header.ttl = TTL;
 	batman_packet->flags = PRIMARIES_FIRST_HOP;
-	batman_packet->ttl = TTL;
 
 	update_primary_addr(bat_priv);
 
@@ -312,10 +312,10 @@ int hardif_enable_interface(struct hard_iface *hard_iface, char *iface_name)
 	}
 
 	batman_packet = (struct batman_packet *)(hard_iface->packet_buff);
-	batman_packet->packet_type = BAT_PACKET;
-	batman_packet->version = COMPAT_VERSION;
+	batman_packet->header.packet_type = BAT_PACKET;
+	batman_packet->header.version = COMPAT_VERSION;
+	batman_packet->header.ttl = 2;
 	batman_packet->flags = 0;
-	batman_packet->ttl = 2;
 	batman_packet->tq = TQ_MAX_VALUE;
 	batman_packet->num_hna = 0;
 
@@ -559,7 +559,7 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 			   struct net_device *orig_dev)
 {
 	struct bat_priv *bat_priv;
-	struct batman_packet *batman_packet;
+	struct batman_header *batman_header;
 	struct hard_iface *hard_iface;
 	int ret;
 
@@ -591,19 +591,19 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 	if (hard_iface->if_status != IF_ACTIVE)
 		goto err_free;
 
-	batman_packet = (struct batman_packet *)skb->data;
+	batman_header = (struct batman_header *)skb->data;
 
-	if (batman_packet->version != COMPAT_VERSION) {
+	if (batman_header->version != COMPAT_VERSION) {
 		bat_dbg(DBG_BATMAN, bat_priv,
 			"Drop packet: incompatible batman version (%i)\n",
-			batman_packet->version);
+			batman_header->version);
 		goto err_free;
 	}
 
 	/* all receive handlers return whether they received or reused
 	 * the supplied skb. if not, we have to free the skb. */
 
-	switch (batman_packet->packet_type) {
+	switch (batman_header->packet_type) {
 		/* batman originator packet */
 	case BAT_PACKET:
 		ret = recv_bat_packet(skb, hard_iface);

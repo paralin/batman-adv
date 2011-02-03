@@ -430,8 +430,8 @@ static void update_orig(struct bat_priv *bat_priv,
 	neigh_node->tq_avg = ring_buffer_avg(neigh_node->tq_recv);
 
 	if (!is_duplicate) {
-		orig_node->last_ttl = batman_packet->ttl;
-		neigh_node->last_ttl = batman_packet->ttl;
+		orig_node->last_ttl = batman_packet->header.ttl;
+		neigh_node->last_ttl = batman_packet->header.ttl;
 	}
 
 	bonding_candidate_add(orig_node, neigh_node);
@@ -621,7 +621,7 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 	 * packet in an aggregation.  Here we expect that the padding
 	 * is always zero (or not 0x01)
 	 */
-	if (batman_packet->packet_type != BAT_PACKET)
+	if (batman_packet->header.packet_type != BAT_PACKET)
 		return;
 
 	/* could be changed by schedule_own_packet() */
@@ -639,8 +639,8 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 		ethhdr->h_source, if_incoming->net_dev->name,
 		if_incoming->net_dev->dev_addr, batman_packet->orig,
 		batman_packet->prev_sender, batman_packet->seqno,
-		batman_packet->tq, batman_packet->ttl, batman_packet->version,
-		has_directlink_flag);
+		batman_packet->tq, batman_packet->header.ttl,
+		batman_packet->header.version, has_directlink_flag);
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(hard_iface, &hardif_list, list) {
@@ -667,10 +667,10 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 	}
 	rcu_read_unlock();
 
-	if (batman_packet->version != COMPAT_VERSION) {
+	if (batman_packet->header.version != COMPAT_VERSION) {
 		bat_dbg(DBG_BATMAN, bat_priv,
 			"Drop packet: incompatible batman version (%i)\n",
-			batman_packet->version);
+			batman_packet->header.version);
 		return;
 	}
 
@@ -787,7 +787,7 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 	if (is_bidirectional &&
 	    (!is_duplicate ||
 	     ((orig_node->last_real_seqno == batman_packet->seqno) &&
-	      (orig_node->last_ttl - 3 <= batman_packet->ttl))))
+	      (orig_node->last_ttl - 3 <= batman_packet->header.ttl))))
 		update_orig(bat_priv, orig_node, ethhdr, batman_packet,
 			    if_incoming, hna_buff, hna_buff_len, is_duplicate);
 
@@ -914,7 +914,7 @@ static int recv_my_icmp_packet(struct bat_priv *bat_priv,
 	memcpy(icmp_packet->orig,
 		bat_priv->primary_if->net_dev->dev_addr, ETH_ALEN);
 	icmp_packet->msg_type = ECHO_REPLY;
-	icmp_packet->ttl = TTL;
+	icmp_packet->header.ttl = TTL;
 
 	send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
 	ret = NET_RX_SUCCESS;
@@ -980,7 +980,7 @@ static int recv_icmp_ttl_exceeded(struct bat_priv *bat_priv,
 	memcpy(icmp_packet->orig,
 		bat_priv->primary_if->net_dev->dev_addr, ETH_ALEN);
 	icmp_packet->msg_type = TTL_EXCEEDED;
-	icmp_packet->ttl = TTL;
+	icmp_packet->header.ttl = TTL;
 
 	send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
 	ret = NET_RX_SUCCESS;
@@ -1046,7 +1046,7 @@ int recv_icmp_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 		return recv_my_icmp_packet(bat_priv, skb, hdr_size);
 
 	/* TTL exceeded */
-	if (icmp_packet->ttl < 2)
+	if (icmp_packet->header.ttl < 2)
 		return recv_icmp_ttl_exceeded(bat_priv, skb);
 
 	/* get routing information */
@@ -1075,7 +1075,7 @@ int recv_icmp_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	icmp_packet = (struct icmp_packet_rr *)skb->data;
 
 	/* decrement ttl */
-	icmp_packet->ttl--;
+	icmp_packet->header.ttl--;
 
 	/* route it */
 	send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
@@ -1276,7 +1276,7 @@ int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	unicast_packet = (struct unicast_packet *)skb->data;
 
 	/* TTL exceeded */
-	if (unicast_packet->ttl < 2) {
+	if (unicast_packet->header.ttl < 2) {
 		pr_debug("Warning - can't forward unicast packet from %pM to "
 			 "%pM: ttl exceeded\n", ethhdr->h_source,
 			 unicast_packet->dest);
@@ -1304,7 +1304,7 @@ int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 
 	unicast_packet = (struct unicast_packet *)skb->data;
 
-	if (unicast_packet->packet_type == BAT_UNICAST &&
+	if (unicast_packet->header.packet_type == BAT_UNICAST &&
 	    atomic_read(&bat_priv->fragmentation) &&
 	    skb->len > neigh_node->if_incoming->net_dev->mtu) {
 		ret = frag_send_skb(skb, bat_priv,
@@ -1312,7 +1312,7 @@ int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 		goto out;
 	}
 
-	if (unicast_packet->packet_type == BAT_UNICAST_FRAG &&
+	if (unicast_packet->header.packet_type == BAT_UNICAST_FRAG &&
 	    frag_can_reassemble(skb, neigh_node->if_incoming->net_dev->mtu)) {
 
 		ret = frag_reassemble_skb(skb, bat_priv, &new_skb);
@@ -1331,7 +1331,7 @@ int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	}
 
 	/* decrement ttl */
-	unicast_packet->ttl--;
+	unicast_packet->header.ttl--;
 
 	/* route it */
 	send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
@@ -1435,7 +1435,7 @@ int recv_bcast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	if (is_my_mac(bcast_packet->orig))
 		goto out;
 
-	if (bcast_packet->ttl < 2)
+	if (bcast_packet->header.ttl < 2)
 		goto out;
 
 	rcu_read_lock();

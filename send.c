@@ -139,7 +139,7 @@ static void send_packet_to_if(struct forw_packet *forw_packet,
 			" IDF %s) on interface %s [%pM]\n",
 			fwd_str, (packet_num > 0 ? "aggregated " : ""),
 			batman_packet->orig, ntohl(batman_packet->seqno),
-			batman_packet->tq, batman_packet->ttl,
+			batman_packet->tq, batman_packet->header.ttl,
 			(batman_packet->flags & DIRECTLINK ?
 			 "on" : "off"),
 			hard_iface->net_dev->name,
@@ -182,7 +182,7 @@ static void send_packet(struct forw_packet *forw_packet)
 
 	/* multihomed peer assumed */
 	/* non-primary OGMs are only broadcasted on their interface */
-	if ((directlink && (batman_packet->ttl == 1)) ||
+	if ((directlink && (batman_packet->header.ttl == 1)) ||
 	    (forw_packet->own && (forw_packet->if_incoming->if_num > 0))) {
 
 		/* FIXME: what about aggregated packets ? */
@@ -191,7 +191,7 @@ static void send_packet(struct forw_packet *forw_packet)
 			"on interface %s [%pM]\n",
 			(forw_packet->own ? "Sending own" : "Forwarding"),
 			batman_packet->orig, ntohl(batman_packet->seqno),
-			batman_packet->ttl,
+			batman_packet->header.ttl,
 			forw_packet->if_incoming->net_dev->name,
 			forw_packet->if_incoming->net_dev->dev_addr);
 
@@ -311,15 +311,15 @@ void schedule_forward_packet(struct orig_node *orig_node,
 	unsigned char in_tq, in_ttl, tq_avg = 0;
 	unsigned long send_time;
 
-	if (batman_packet->ttl <= 1) {
+	if (batman_packet->header.ttl <= 1) {
 		bat_dbg(DBG_BATMAN, bat_priv, "ttl exceeded\n");
 		return;
 	}
 
 	in_tq = batman_packet->tq;
-	in_ttl = batman_packet->ttl;
+	in_ttl = batman_packet->header.ttl;
 
-	batman_packet->ttl--;
+	batman_packet->header.ttl--;
 	memcpy(batman_packet->prev_sender, ethhdr->h_source, ETH_ALEN);
 
 	/* rebroadcast tq of our best ranking neighbor to ensure the rebroadcast
@@ -331,8 +331,8 @@ void schedule_forward_packet(struct orig_node *orig_node,
 			batman_packet->tq = orig_node->router->tq_avg;
 
 			if (orig_node->router->last_ttl)
-				batman_packet->ttl = orig_node->router->last_ttl
-							- 1;
+				batman_packet->header.ttl =
+					orig_node->router->last_ttl - 1;
 		}
 
 		tq_avg = orig_node->router->tq_avg;
@@ -345,7 +345,7 @@ void schedule_forward_packet(struct orig_node *orig_node,
 		"Forwarding packet: tq_orig: %i, tq_avg: %i, "
 		"tq_forw: %i, ttl_orig: %i, ttl_forw: %i\n",
 		in_tq, tq_avg, batman_packet->tq, in_ttl - 1,
-		batman_packet->ttl);
+		batman_packet->header.ttl);
 
 	batman_packet->seqno = htonl(batman_packet->seqno);
 
@@ -421,7 +421,7 @@ int add_bcast_packet_to_list(struct bat_priv *bat_priv, struct sk_buff *skb)
 
 	/* as we have a copy now, it is safe to decrease the TTL */
 	bcast_packet = (struct bcast_packet *)skb->data;
-	bcast_packet->ttl--;
+	bcast_packet->header.ttl--;
 
 	skb_reset_mac_header(skb);
 
