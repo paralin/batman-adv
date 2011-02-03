@@ -69,7 +69,7 @@ static bool can_aggregate_with(struct batman_packet *new_batman_packet,
 		 * are flooded through the net  */
 		if ((!directlink) &&
 		    (!(batman_packet->flags & DIRECTLINK)) &&
-		    (batman_packet->ttl != 1) &&
+		    (batman_packet->header.ttl != 1) &&
 
 		    /* own packets originating non-primary
 		     * interfaces leave only that interface */
@@ -80,7 +80,7 @@ static bool can_aggregate_with(struct batman_packet *new_batman_packet,
 		/* if the incoming packet is sent via this one
 		 * interface only - we still can aggregate */
 		if ((directlink) &&
-		    (new_batman_packet->ttl == 1) &&
+		    (new_batman_packet->header.ttl == 1) &&
 		    (forw_packet->if_incoming == if_incoming) &&
 
 		    /* packets from direct neighbors or
