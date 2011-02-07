@@ -308,12 +308,10 @@ route:
 	/* copy the destination for faster routing */
 	memcpy(unicast_packet->dest, orig_node->orig, ETH_ALEN);
 
-	ret = route_unicast_packet(orig_node->bat_priv, skb, NULL,
-		unicast_packet->dest, unicast_packet->header.packet_type);
+	ret = route_unicast_packet(skb, NULL, orig_node,
+				   unicast_packet->header.packet_type);
 
 out:
-	if (orig_node)
-		orig_node_free_ref(orig_node);
 	if (ret == NET_RX_DROP)
 		kfree_skb(skb);
 

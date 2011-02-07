@@ -20,6 +20,7 @@
  */
 
 #include "main.h"
+#include "originator.h"
 #include "soft-interface.h"
 #include "hard-interface.h"
 #include "routing.h"
@@ -419,6 +420,7 @@ void interface_rx(struct net_device *soft_iface,
 {
 	struct bat_priv *bat_priv = netdev_priv(soft_iface);
 	struct unicast_packet *unicast_packet;
+	struct orig_node *orig_node;
 	struct ethhdr *ethhdr;
 	struct vlan_ethhdr *vhdr;
 	short vid = -1;
@@ -462,8 +464,9 @@ void interface_rx(struct net_device *soft_iface,
 
 		memcpy(unicast_packet->dest,
 		       bat_priv->softif_neigh->addr, ETH_ALEN);
-		ret = route_unicast_packet(bat_priv, skb, recv_if,
-					   unicast_packet->dest,
+
+		orig_node = orig_hash_find(bat_priv, unicast_packet->dest);
+		ret = route_unicast_packet(skb, recv_if, orig_node,
 					   unicast_packet->header.packet_type);
 		if (ret == NET_RX_DROP)
 			goto dropped;
