@@ -22,6 +22,7 @@
 #include "main.h"
 #include "send.h"
 #include "routing.h"
+#include "hash.h"
 #include "translation-table.h"
 #include "soft-interface.h"
 #include "hard-interface.h"
@@ -53,13 +54,105 @@ static unsigned long forward_send_time(void)
 	return jiffies + msecs_to_jiffies(random32() % (JITTER/2));
 }
 
+static int send_icmp_ttl_exceeded(struct bat_priv *bat_priv,
+				  struct sk_buff *skb)
+{
+	struct orig_node *orig_node = NULL;
+	struct neigh_node *neigh_node = NULL;
+	struct icmp_packet *icmp_packet;
+	int ret = NET_RX_DROP;
+
+	icmp_packet = (struct icmp_packet *)skb->data;
+
+	/* send TTL exceeded if packet is an echo request (traceroute) */
+	if (icmp_packet->msg_type != ECHO_REQUEST) {
+		pr_debug("Warning - can't forward icmp packet from %pM to "
+			 "%pM: ttl exceeded\n", icmp_packet->orig,
+			 icmp_packet->dst);
+		goto out;
+	}
+
+	if (!bat_priv->primary_if)
+		goto out;
+
+	/* get routing information */
+	rcu_read_lock();
+	orig_node = orig_hash_find(bat_priv, icmp_packet->orig);
+
+	if (!orig_node)
+		goto unlock;
+
+	neigh_node = orig_node->router;
+
+	if (!neigh_node)
+		goto unlock;
+
+	if (!atomic_inc_not_zero(&neigh_node->refcount)) {
+		neigh_node = NULL;
+		goto unlock;
+	}
+
+	rcu_read_unlock();
+
+	/* create a copy of the skb, if needed, to modify it. */
+	if (skb_cow(skb, sizeof(struct ethhdr)) < 0)
+		goto out;
+
+	icmp_packet = (struct icmp_packet *)skb->data;
+
+	memcpy(icmp_packet->dst, icmp_packet->orig, ETH_ALEN);
+	memcpy(icmp_packet->orig,
+		bat_priv->primary_if->net_dev->dev_addr, ETH_ALEN);
+	icmp_packet->msg_type = TTL_EXCEEDED;
+	icmp_packet->header.ttl = TTL;
+
+	send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
+	ret = NET_RX_SUCCESS;
+	goto out;
+
+unlock:
+	rcu_read_unlock();
+out:
+	if (neigh_node)
+		neigh_node_free_ref(neigh_node);
+	if (orig_node)
+		orig_node_free_ref(orig_node);
+	return ret;
+}
+
+static void print_ttl_exceeded(struct sk_buff *skb, int packet_type,
+			       struct bat_priv *bat_priv) {
+	switch (packet_type) {
+	case BAT_PACKET:
+		bat_dbg(DBG_BATMAN, bat_priv, "ttl exceeded\n");
+		break;
+	case BAT_ICMP:
+		send_icmp_ttl_exceeded(bat_priv, skb);
+		break;
+	case BAT_VIS:
+		pr_debug("Error - can't send vis packet: ttl exceeded\n");
+		break;
+	case BAT_UNICAST:
+		pr_debug("Warning - can't forward unicast packet from %pM to "
+			 "%pM: ttl exceeded\n",
+			 ((struct ethhdr *)skb->data)->h_source,
+			 ((struct unicast_packet *)skb->data)->dest);
+		break;
+	default:
+		break;
+	}
+}
+
 /* send out an already prepared packet to the given address via the
- * specified batman interface */
+ * specified batman interface; drops it if the current TTL is 1 or less
+ * or else reduces the TTL by one */
 int send_skb_packet(struct sk_buff *skb,
 				struct hard_iface *hard_iface,
 				uint8_t *dst_addr)
 {
 	struct ethhdr *ethhdr;
+	struct batman_header *batman_header;
+	struct bat_priv *bat_priv = netdev_priv(hard_iface->soft_iface);
 
 	if (hard_iface->if_status != IF_ACTIVE)
 		goto send_skb_err;
@@ -72,6 +165,15 @@ int send_skb_packet(struct sk_buff *skb,
 			   "that interface!\n", hard_iface->net_dev->name);
 		goto send_skb_err;
 	}
+
+	if (unlikely(!pskb_may_pull(skb, sizeof(struct batman_packet))))
+		goto send_skb_err;
+	batman_header = (struct batman_header *) skb->data;
+	if (batman_header->ttl <= 1) {
+		print_ttl_exceeded(skb, batman_header->packet_type, bat_priv);
+		goto send_skb_err;
+	}
+	batman_header->ttl--;
 
 	/* push to the ethernet header. */
 	if (my_skb_head_push(skb, sizeof(struct ethhdr)) < 0)
@@ -182,7 +284,7 @@ static void send_packet(struct forw_packet *forw_packet)
 
 	/* multihomed peer assumed */
 	/* non-primary OGMs are only broadcasted on their interface */
-	if ((directlink && (batman_packet->header.ttl == 1)) ||
+	if ((directlink && (batman_packet->header.ttl == 2)) ||
 	    (forw_packet->own && (forw_packet->if_incoming->if_num > 0))) {
 
 		/* FIXME: what about aggregated packets ? */
@@ -311,15 +413,9 @@ void schedule_forward_packet(struct orig_node *orig_node,
 	unsigned char in_tq, in_ttl, tq_avg = 0;
 	unsigned long send_time;
 
-	if (batman_packet->header.ttl <= 1) {
-		bat_dbg(DBG_BATMAN, bat_priv, "ttl exceeded\n");
-		return;
-	}
-
 	in_tq = batman_packet->tq;
 	in_ttl = batman_packet->header.ttl;
 
-	batman_packet->header.ttl--;
 	memcpy(batman_packet->prev_sender, ethhdr->h_source, ETH_ALEN);
 
 	/* rebroadcast tq of our best ranking neighbor to ensure the rebroadcast
@@ -332,7 +428,7 @@ void schedule_forward_packet(struct orig_node *orig_node,
 
 			if (orig_node->router->last_ttl)
 				batman_packet->header.ttl =
-					orig_node->router->last_ttl - 1;
+						orig_node->router->last_ttl;
 		}
 
 		tq_avg = orig_node->router->tq_avg;
@@ -344,8 +440,8 @@ void schedule_forward_packet(struct orig_node *orig_node,
 	bat_dbg(DBG_BATMAN, bat_priv,
 		"Forwarding packet: tq_orig: %i, tq_avg: %i, "
 		"tq_forw: %i, ttl_orig: %i, ttl_forw: %i\n",
-		in_tq, tq_avg, batman_packet->tq, in_ttl - 1,
-		batman_packet->header.ttl);
+		in_tq, tq_avg, batman_packet->tq, in_ttl,
+		batman_packet->header.ttl - 1);
 
 	batman_packet->seqno = htonl(batman_packet->seqno);
 
@@ -400,7 +496,6 @@ static void _add_bcast_packet_to_list(struct bat_priv *bat_priv,
 int add_bcast_packet_to_list(struct bat_priv *bat_priv, struct sk_buff *skb)
 {
 	struct forw_packet *forw_packet;
-	struct bcast_packet *bcast_packet;
 
 	if (!atomic_dec_not_zero(&bat_priv->bcast_queue_left)) {
 		bat_dbg(DBG_BATMAN, bat_priv, "bcast packet queue full\n");
@@ -418,10 +513,6 @@ int add_bcast_packet_to_list(struct bat_priv *bat_priv, struct sk_buff *skb)
 	skb = skb_copy(skb, GFP_ATOMIC);
 	if (!skb)
 		goto packet_free;
-
-	/* as we have a copy now, it is safe to decrease the TTL */
-	bcast_packet = (struct bcast_packet *)skb->data;
-	bcast_packet->header.ttl--;
 
 	skb_reset_mac_header(skb);
 

@@ -250,7 +250,6 @@ int frag_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv,
 
 	memcpy(frag1, &tmp_uc, sizeof(struct unicast_packet));
 
-	frag1->header.ttl--;
 	frag1->header.version = COMPAT_VERSION;
 	frag1->header.packet_type = BAT_UNICAST_FRAG;
 
@@ -327,8 +326,6 @@ find_router:
 	if (atomic_read(&bat_priv->fragmentation) &&
 	    data_len + sizeof(struct unicast_packet) >
 				neigh_node->if_incoming->net_dev->mtu) {
-		/* send frag skb decreases ttl */
-		unicast_packet->header.ttl++;
 		ret = frag_send_skb(skb, bat_priv,
 				    neigh_node->if_incoming, neigh_node->addr);
 		goto out;

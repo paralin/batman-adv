@@ -930,73 +930,6 @@ out:
 	return ret;
 }
 
-static int recv_icmp_ttl_exceeded(struct bat_priv *bat_priv,
-				  struct sk_buff *skb)
-{
-	struct orig_node *orig_node = NULL;
-	struct neigh_node *neigh_node = NULL;
-	struct icmp_packet *icmp_packet;
-	int ret = NET_RX_DROP;
-
-	icmp_packet = (struct icmp_packet *)skb->data;
-
-	/* send TTL exceeded if packet is an echo request (traceroute) */
-	if (icmp_packet->msg_type != ECHO_REQUEST) {
-		pr_debug("Warning - can't forward icmp packet from %pM to "
-			 "%pM: ttl exceeded\n", icmp_packet->orig,
-			 icmp_packet->dst);
-		goto out;
-	}
-
-	if (!bat_priv->primary_if)
-		goto out;
-
-	/* get routing information */
-	rcu_read_lock();
-	orig_node = orig_hash_find(bat_priv, icmp_packet->orig);
-
-	if (!orig_node)
-		goto unlock;
-
-	neigh_node = orig_node->router;
-
-	if (!neigh_node)
-		goto unlock;
-
-	if (!atomic_inc_not_zero(&neigh_node->refcount)) {
-		neigh_node = NULL;
-		goto unlock;
-	}
-
-	rcu_read_unlock();
-
-	/* create a copy of the skb, if needed, to modify it. */
-	if (skb_cow(skb, sizeof(struct ethhdr)) < 0)
-		goto out;
-
-	icmp_packet = (struct icmp_packet *)skb->data;
-
-	memcpy(icmp_packet->dst, icmp_packet->orig, ETH_ALEN);
-	memcpy(icmp_packet->orig,
-		bat_priv->primary_if->net_dev->dev_addr, ETH_ALEN);
-	icmp_packet->msg_type = TTL_EXCEEDED;
-	icmp_packet->header.ttl = TTL;
-
-	send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
-	ret = NET_RX_SUCCESS;
-	goto out;
-
-unlock:
-	rcu_read_unlock();
-out:
-	if (neigh_node)
-		neigh_node_free_ref(neigh_node);
-	if (orig_node)
-		orig_node_free_ref(orig_node);
-	return ret;
-}
-
-
 int recv_icmp_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 {
 	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
@@ -1045,10 +978,6 @@ int recv_icmp_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	if (is_my_mac(icmp_packet->dst))
 		return recv_my_icmp_packet(bat_priv, skb, hdr_size);
 
-	/* TTL exceeded */
-	if (icmp_packet->header.ttl < 2)
-		return recv_icmp_ttl_exceeded(bat_priv, skb);
-
 	/* get routing information */
 	rcu_read_lock();
 	orig_node = orig_hash_find(bat_priv, icmp_packet->dst);
@@ -1073,9 +1002,6 @@ int recv_icmp_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 		goto out;
 
 	icmp_packet = (struct icmp_packet_rr *)skb->data;
-
-	/* decrement ttl */
-	icmp_packet->header.ttl--;
 
 	/* route it */
 	send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
@@ -1269,19 +1195,10 @@ int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	struct orig_node *orig_node = NULL;
 	struct neigh_node *neigh_node = NULL;
 	struct unicast_packet *unicast_packet;
-	struct ethhdr *ethhdr = (struct ethhdr *)skb_mac_header(skb);
 	int ret = NET_RX_DROP;
 	struct sk_buff *new_skb;
 
 	unicast_packet = (struct unicast_packet *)skb->data;
-
-	/* TTL exceeded */
-	if (unicast_packet->header.ttl < 2) {
-		pr_debug("Warning - can't forward unicast packet from %pM to "
-			 "%pM: ttl exceeded\n", ethhdr->h_source,
-			 unicast_packet->dest);
-		goto out;
-	}
 
 	/* get routing information */
 	rcu_read_lock();
@@ -1327,11 +1244,7 @@ int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 		}
 
 		skb = new_skb;
-		unicast_packet = (struct unicast_packet *)skb->data;
 	}
-
-	/* decrement ttl */
-	unicast_packet->header.ttl--;
 
 	/* route it */
 	send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
@@ -1433,9 +1346,6 @@ int recv_bcast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 
 	/* ignore broadcasts originated by myself */
 	if (is_my_mac(bcast_packet->orig))
-		goto out;
-
-	if (bcast_packet->header.ttl < 2)
 		goto out;
 
 	rcu_read_lock();
