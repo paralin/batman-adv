@@ -1204,22 +1204,20 @@ static int check_unicast_packet(struct sk_buff *skb, int hdr_size)
 	return 0;
 }
 
-int route_unicast_packet(struct sk_buff *skb, struct batman_if *recv_if)
+int route_unicast_packet(struct sk_buff *skb, struct batman_if *recv_if,
+			 uint8_t *dest, uint8_t packet_type)
 {
 	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
 	struct orig_node *orig_node = NULL;
 	struct neigh_node *neigh_node = NULL;
-	struct unicast_packet *unicast_packet;
 	int ret = NET_RX_DROP;
 	struct sk_buff *new_skb;
-
-	unicast_packet = (struct unicast_packet *)skb->data;
 
 	/* get routing information */
 	rcu_read_lock();
 	orig_node = ((struct orig_node *)
 		     hash_find(bat_priv->orig_hash, compare_orig, choose_orig,
-			       unicast_packet->dest));
+			       dest));
 
 	if (!orig_node)
 		goto unlock;
@@ -1237,9 +1235,7 @@ int route_unicast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	if (skb_cow(skb, sizeof(struct ethhdr)) < 0)
 		goto out;
 
-	unicast_packet = (struct unicast_packet *)skb->data;
-
-	if (unicast_packet->header.packet_type == BAT_UNICAST &&
+	if (packet_type == BAT_UNICAST &&
 	    atomic_read(&bat_priv->fragmentation) &&
 	    skb->len > neigh_node->if_incoming->net_dev->mtu) {
 		ret = frag_send_skb(skb, bat_priv,
@@ -1247,7 +1243,7 @@ int route_unicast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 		goto out;
 	}
 
-	if (unicast_packet->header.packet_type == BAT_UNICAST_FRAG &&
+	if (packet_type == BAT_UNICAST_FRAG &&
 	    frag_can_reassemble(skb, neigh_node->if_incoming->net_dev->mtu)) {
 
 		ret = frag_reassemble_skb(skb, bat_priv, &new_skb);
@@ -1295,7 +1291,8 @@ int recv_unicast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 		return NET_RX_SUCCESS;
 	}
 
-	return route_unicast_packet(skb, recv_if);
+	return route_unicast_packet(skb, recv_if, unicast_packet->dest,
+				    unicast_packet->header.packet_type);
 }
 
 int recv_ucast_frag_packet(struct sk_buff *skb, struct batman_if *recv_if)
@@ -1328,7 +1325,8 @@ int recv_ucast_frag_packet(struct sk_buff *skb, struct batman_if *recv_if)
 		return NET_RX_SUCCESS;
 	}
 
-	return route_unicast_packet(skb, recv_if);
+	return route_unicast_packet(skb, recv_if, unicast_packet->dest,
+				    unicast_packet->header.packet_type);
 }
 
 
