@@ -282,34 +282,19 @@ int unicast_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv)
 	struct ethhdr *ethhdr = (struct ethhdr *)skb->data;
 	struct unicast_packet *unicast_packet;
 	struct orig_node *orig_node;
-	struct neigh_node *neigh_node;
-	int data_len = skb->len;
-	int ret = 1;
+	int ret = NET_RX_DROP;
 
 	/* get routing information */
 	if (is_multicast_ether_addr(ethhdr->h_dest)) {
 		orig_node = (struct orig_node *)gw_get_selected(bat_priv);
 		if (orig_node)
-			goto find_router;
+			goto route;
 	}
 
 	/* check for hna host - increases orig_node refcount */
 	orig_node = transtable_search(bat_priv, ethhdr->h_dest);
 
-find_router:
-	/**
-	 * find_router():
-	 *  - if orig_node is NULL it returns NULL
-	 *  - increases neigh_nodes refcount if found.
-	 */
-	neigh_node = find_router(bat_priv, orig_node, NULL);
-
-	if (!neigh_node)
-		goto out;
-
-	if (neigh_node->if_incoming->if_status != IF_ACTIVE)
-		goto out;
-
+route:
 	if (my_skb_head_push(skb, sizeof(struct unicast_packet)) < 0)
 		goto out;
 
@@ -323,24 +308,14 @@ find_router:
 	/* copy the destination for faster routing */
 	memcpy(unicast_packet->dest, orig_node->orig, ETH_ALEN);
 
-	if (atomic_read(&bat_priv->fragmentation) &&
-	    data_len + sizeof(struct unicast_packet) >
-				neigh_node->if_incoming->net_dev->mtu) {
-		ret = frag_send_skb(skb, bat_priv,
-				    neigh_node->if_incoming, neigh_node->addr);
-		goto out;
-	}
-
-	send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
-	ret = 0;
-	goto out;
+	ret = route_unicast_packet(orig_node->bat_priv, skb, NULL,
+		unicast_packet->dest, unicast_packet->header.packet_type);
 
 out:
-	if (neigh_node)
-		neigh_node_free_ref(neigh_node);
 	if (orig_node)
 		orig_node_free_ref(orig_node);
-	if (ret == 1)
+	if (ret == NET_RX_DROP)
 		kfree_skb(skb);
+
 	return ret;
 }

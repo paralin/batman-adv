@@ -1189,10 +1189,10 @@ static int check_unicast_packet(struct sk_buff *skb, int hdr_size)
 	return 0;
 }
 
-int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if,
-			 uint8_t *dest, uint8_t packet_type)
+int route_unicast_packet(struct bat_priv *bat_priv, struct sk_buff *skb,
+			 struct hard_iface *recv_if, uint8_t *dest,
+			 uint8_t packet_type)
 {
-	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
 	struct orig_node *orig_node = NULL;
 	struct neigh_node *neigh_node = NULL;
 	int ret = NET_RX_DROP;
@@ -1259,6 +1259,7 @@ out:
 
 int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 {
+	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
 	struct unicast_packet *unicast_packet;
 	int hdr_size = sizeof(struct unicast_packet);
 
@@ -1273,8 +1274,8 @@ int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 		return NET_RX_SUCCESS;
 	}
 
-	return route_unicast_packet(skb, recv_if, unicast_packet->dest,
-				    unicast_packet->header.packet_type);
+	return route_unicast_packet(bat_priv, skb, recv_if,
+		unicast_packet->dest, unicast_packet->header.packet_type);
 }
 
 int recv_ucast_frag_packet(struct sk_buff *skb, struct hard_iface *recv_if)
@@ -1307,8 +1308,8 @@ int recv_ucast_frag_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 		return NET_RX_SUCCESS;
 	}
 
-	return route_unicast_packet(skb, recv_if, unicast_packet->dest,
-				    unicast_packet->header.packet_type);
+	return route_unicast_packet(bat_priv, skb, recv_if,
+		unicast_packet->dest, unicast_packet->header.packet_type);
 }
 
 

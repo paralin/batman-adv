@@ -30,8 +30,9 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 void update_routes(struct bat_priv *bat_priv, struct orig_node *orig_node,
 		   struct neigh_node *neigh_node, unsigned char *hna_buff,
 		   int hna_buff_len);
-int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if,
-			 uint8_t *dest, uint8_t packet_type);
+int route_unicast_packet(struct bat_priv *bat_priv, struct sk_buff *skb,
+			 struct hard_iface *recv_if, uint8_t *dest,
+			 uint8_t packet_type);
 int recv_icmp_packet(struct sk_buff *skb, struct hard_iface *recv_if);
 int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if);
 int recv_ucast_frag_packet(struct sk_buff *skb, struct hard_iface *recv_if);

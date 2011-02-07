@@ -462,7 +462,8 @@ void interface_rx(struct net_device *soft_iface,
 
 		memcpy(unicast_packet->dest,
 		       bat_priv->softif_neigh->addr, ETH_ALEN);
-		ret = route_unicast_packet(skb, recv_if, unicast_packet->dest,
+		ret = route_unicast_packet(bat_priv, skb, recv_if,
+					   unicast_packet->dest,
 					   unicast_packet->header.packet_type);
 		if (ret == NET_RX_DROP)
 			goto dropped;
