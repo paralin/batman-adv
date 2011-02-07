@@ -76,22 +76,16 @@ static int recv_icmp_ttl_exceeded(struct bat_priv *bat_priv,
 		goto out;
 
 	/* get routing information */
-	rcu_read_lock();
-	orig_node = ((struct orig_node *)
-		     hash_find(bat_priv->orig_hash, compare_orig, choose_orig,
-			       icmp_packet->orig));
+	orig_node = hash_find_orig(bat_priv, icmp_packet->orig);
 	if (!orig_node)
-		goto unlock;
+		goto out;
 
-	kref_get(&orig_node->refcount);
+	rcu_read_lock();
 	neigh_node = orig_node->router;
-
-	if (!neigh_node)
-		goto unlock;
-
-	if (!atomic_inc_not_zero(&neigh_node->refcount)) {
+	if (!neigh_node || !atomic_inc_not_zero(&neigh_node->refcount)) {
 		neigh_node = NULL;
-		goto unlock;
+		rcu_read_unlock();
+		goto out;
 	}
 
 	rcu_read_unlock();
@@ -112,8 +106,6 @@ static int recv_icmp_ttl_exceeded(struct bat_priv *bat_priv,
 	ret = NET_RX_SUCCESS;
 	goto out;
 
-unlock:
-	rcu_read_unlock();
 out:
 	if (neigh_node)
 		neigh_node_free_ref(neigh_node);

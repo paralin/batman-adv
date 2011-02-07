@@ -189,16 +189,9 @@ struct orig_node *get_orig_node(struct bat_priv *bat_priv, uint8_t *addr)
 	int size;
 	int hash_added;
 
-	rcu_read_lock();
-	orig_node = ((struct orig_node *)hash_find(bat_priv->orig_hash,
-						   compare_orig, choose_orig,
-						   addr));
-	rcu_read_unlock();
-
-	if (orig_node) {
-		kref_get(&orig_node->refcount);
+	orig_node = hash_find_orig(bat_priv, addr);
+	if (orig_node)
 		return orig_node;
-	}
 
 	bat_dbg(DBG_BATMAN, bat_priv,
 		"Creating new originator: %pM\n", addr);

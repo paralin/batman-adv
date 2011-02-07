@@ -184,15 +184,9 @@ int frag_reassemble_skb(struct sk_buff *skb, struct bat_priv *bat_priv,
 
 	*new_skb = NULL;
 
-	rcu_read_lock();
-	orig_node = ((struct orig_node *)
-		    hash_find(bat_priv->orig_hash, compare_orig, choose_orig,
-			      unicast_packet->orig));
+	orig_node = hash_find_orig(bat_priv, unicast_packet->orig);
 	if (!orig_node)
-		goto unlock;
-
-	kref_get(&orig_node->refcount);
-	rcu_read_unlock();
+		goto out;
 
 	orig_node->last_frag_packet = jiffies;
 
@@ -217,10 +211,6 @@ int frag_reassemble_skb(struct sk_buff *skb, struct bat_priv *bat_priv,
 	if (*new_skb)
 		ret = NET_RX_SUCCESS;
 
-	goto out;
-
-unlock:
-	rcu_read_unlock();
 out:
 	if (orig_node)
 		kref_put(&orig_node->refcount, orig_node_free_ref);

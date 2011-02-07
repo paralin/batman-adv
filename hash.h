@@ -23,6 +23,7 @@
 #define _NET_BATMAN_ADV_HASH_H_
 
 #include <linux/list.h>
+#include "originator.h"
 
 /* callback to a compare function.  should
  * compare 2 element datas for their keys,
@@ -191,6 +192,23 @@ static inline void *hash_find(struct hashtable_t *hash,
 	}
 
 	return bucket_data;
+}
+
+/* increases the orig_node's refcount, if found */
+static inline struct orig_node *hash_find_orig(struct bat_priv *bat_priv,
+					       uint8_t *dest)
+{
+	struct hashtable_t *hash = bat_priv->orig_hash;
+	struct orig_node *orig_node;
+
+	rcu_read_lock();
+
+	orig_node = hash_find(hash, compare_orig, choose_orig, dest);
+	if (orig_node)
+		kref_get(&orig_node->refcount);
+
+	rcu_read_unlock();
+	return orig_node;
 }
 
 #endif /* _NET_BATMAN_ADV_HASH_H_ */

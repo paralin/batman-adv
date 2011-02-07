@@ -897,22 +897,16 @@ static int recv_my_icmp_packet(struct bat_priv *bat_priv,
 
 	/* answer echo request (ping) */
 	/* get routing information */
-	rcu_read_lock();
-	orig_node = ((struct orig_node *)hash_find(bat_priv->orig_hash,
-						   compare_orig, choose_orig,
-						   icmp_packet->orig));
+	orig_node = hash_find_orig(bat_priv, icmp_packet->orig);
 	if (!orig_node)
-		goto unlock;
+		goto out;
 
-	kref_get(&orig_node->refcount);
+	rcu_read_lock();
 	neigh_node = orig_node->router;
-
-	if (!neigh_node)
-		goto unlock;
-
-	if (!atomic_inc_not_zero(&neigh_node->refcount)) {
+	if (!neigh_node || !atomic_inc_not_zero(&neigh_node->refcount)) {
 		neigh_node = NULL;
-		goto unlock;
+		rcu_read_unlock();
+		goto out;
 	}
 
 	rcu_read_unlock();
@@ -933,8 +927,6 @@ static int recv_my_icmp_packet(struct bat_priv *bat_priv,
 	ret = NET_RX_SUCCESS;
 	goto out;
 
-unlock:
-	rcu_read_unlock();
 out:
 	if (neigh_node)
 		neigh_node_free_ref(neigh_node);
@@ -992,22 +984,16 @@ int recv_icmp_packet(struct sk_buff *skb, struct batman_if *recv_if)
 		return recv_my_icmp_packet(bat_priv, skb, hdr_size);
 
 	/* get routing information */
-	rcu_read_lock();
-	orig_node = ((struct orig_node *)
-		     hash_find(bat_priv->orig_hash, compare_orig, choose_orig,
-			       icmp_packet->dst));
+	orig_node = hash_find_orig(bat_priv, icmp_packet->dst);
 	if (!orig_node)
-		goto unlock;
+		goto out;
 
-	kref_get(&orig_node->refcount);
+	rcu_read_lock();
 	neigh_node = orig_node->router;
-
-	if (!neigh_node)
-		goto unlock;
-
-	if (!atomic_inc_not_zero(&neigh_node->refcount)) {
+	if (!neigh_node || !atomic_inc_not_zero(&neigh_node->refcount)) {
 		neigh_node = NULL;
-		goto unlock;
+		rcu_read_unlock();
+		goto out;
 	}
 
 	rcu_read_unlock();
@@ -1023,8 +1009,6 @@ int recv_icmp_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	ret = NET_RX_SUCCESS;
 	goto out;
 
-unlock:
-	rcu_read_unlock();
 out:
 	if (neigh_node)
 		neigh_node_free_ref(neigh_node);
@@ -1214,16 +1198,9 @@ int route_unicast_packet(struct sk_buff *skb, struct batman_if *recv_if,
 	struct sk_buff *new_skb;
 
 	/* get routing information */
-	rcu_read_lock();
-	orig_node = ((struct orig_node *)
-		     hash_find(bat_priv->orig_hash, compare_orig, choose_orig,
-			       dest));
-
+	orig_node = hash_find_orig(bat_priv, dest);
 	if (!orig_node)
-		goto unlock;
-
-	kref_get(&orig_node->refcount);
-	rcu_read_unlock();
+		goto out;
 
 	/* find_router() increases neigh_nodes refcount if found. */
 	neigh_node = find_router(bat_priv, orig_node, recv_if);
@@ -1265,8 +1242,6 @@ int route_unicast_packet(struct sk_buff *skb, struct batman_if *recv_if,
 	ret = NET_RX_SUCCESS;
 	goto out;
 
-unlock:
-	rcu_read_unlock();
 out:
 	if (neigh_node)
 		neigh_node_free_ref(neigh_node);
@@ -1364,16 +1339,9 @@ int recv_bcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	if (is_my_mac(bcast_packet->orig))
 		goto out;
 
-	rcu_read_lock();
-	orig_node = ((struct orig_node *)
-		     hash_find(bat_priv->orig_hash, compare_orig, choose_orig,
-			       bcast_packet->orig));
-
+	orig_node = hash_find_orig(bat_priv, bcast_packet->orig);
 	if (!orig_node)
-		goto rcu_unlock;
-
-	kref_get(&orig_node->refcount);
-	rcu_read_unlock();
+		goto out;
 
 	spin_lock_bh(&orig_node->bcast_seqno_lock);
 
@@ -1404,9 +1372,6 @@ int recv_bcast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	ret = NET_RX_SUCCESS;
 	goto out;
 
-rcu_unlock:
-	rcu_read_unlock();
-	goto out;
 spin_unlock:
 	spin_unlock_bh(&orig_node->bcast_seqno_lock);
 out:
