@@ -806,20 +806,14 @@ static void send_vis_packet(struct bat_priv *bat_priv, struct vis_info *info)
 	struct vis_packet *packet;
 
 	packet = (struct vis_packet *)info->skb_packet->data;
-	if (packet->header.ttl < 2) {
-		pr_debug("Error - can't send vis packet: ttl exceeded\n");
-		return;
-	}
 
 	memcpy(packet->sender_orig, bat_priv->primary_if->net_dev->dev_addr,
 	       ETH_ALEN);
-	packet->header.ttl--;
 
 	if (is_broadcast_ether_addr(packet->target_orig))
 		broadcast_vis_packet(bat_priv, info);
 	else
 		unicast_vis_packet(bat_priv, info);
-	packet->header.ttl++; /* restore TTL */
 }
 
 /* called from timer; send (and maybe generate) vis packet. */

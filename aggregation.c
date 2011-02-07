@@ -69,7 +69,7 @@ static bool can_aggregate_with(struct batman_packet *new_batman_packet,
 		 * are flooded through the net  */
 		if ((!directlink) &&
 		    (!(batman_packet->flags & DIRECTLINK)) &&
-		    (batman_packet->header.ttl != 1) &&
+		    (batman_packet->header.ttl != 2) &&
 
 		    /* own packets originating non-primary
 		     * interfaces leave only that interface */
