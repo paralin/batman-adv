@@ -1020,10 +1020,10 @@ out:
 /* find a suitable router for this originator, and use
  * bonding if possible. increases the found neighbors
  * refcount.*/
-struct neigh_node *find_router(struct bat_priv *bat_priv,
-			       struct orig_node *orig_node,
+struct neigh_node *find_router(struct orig_node *orig_node,
 			       struct batman_if *recv_if)
 {
+	struct bat_priv *bat_priv;
 	struct orig_node *primary_orig_node;
 	struct orig_node *router_orig;
 	struct neigh_node *router, *first_candidate, *tmp_neigh_node;
@@ -1035,6 +1035,8 @@ struct neigh_node *find_router(struct bat_priv *bat_priv,
 
 	if (!orig_node->router)
 		return NULL;
+
+	bat_priv = orig_node->bat_priv;
 
 	/* without bonding, the first node should
 	 * always choose the default router. */
@@ -1188,22 +1190,15 @@ static int check_unicast_packet(struct sk_buff *skb, int hdr_size)
 	return 0;
 }
 
-int route_unicast_packet(struct bat_priv *bat_priv, struct sk_buff *skb,
-			 struct batman_if *recv_if, uint8_t *dest,
-			 uint8_t packet_type)
+int route_unicast_packet(struct sk_buff *skb, struct batman_if *recv_if,
+			 struct orig_node *orig_node, uint8_t packet_type)
 {
-	struct orig_node *orig_node = NULL;
 	struct neigh_node *neigh_node = NULL;
 	int ret = NET_RX_DROP;
 	struct sk_buff *new_skb;
 
-	/* get routing information */
-	orig_node = hash_find_orig(bat_priv, dest);
-	if (!orig_node)
-		goto out;
-
 	/* find_router() increases neigh_nodes refcount if found. */
-	neigh_node = find_router(bat_priv, orig_node, recv_if);
+	neigh_node = find_router(orig_node, recv_if);
 
 	if (!neigh_node)
 		goto out;
@@ -1213,9 +1208,9 @@ int route_unicast_packet(struct bat_priv *bat_priv, struct sk_buff *skb,
 		goto out;
 
 	if (packet_type == BAT_UNICAST &&
-	    atomic_read(&bat_priv->fragmentation) &&
+	    atomic_read(&orig_node->bat_priv->fragmentation) &&
 	    skb->len > neigh_node->if_incoming->net_dev->mtu) {
-		ret = frag_send_skb(skb, bat_priv,
+		ret = frag_send_skb(skb, orig_node->bat_priv,
 				    neigh_node->if_incoming, neigh_node->addr);
 		goto out;
 	}
@@ -1223,7 +1218,7 @@ int route_unicast_packet(struct bat_priv *bat_priv, struct sk_buff *skb,
 	if (packet_type == BAT_UNICAST_FRAG &&
 	    frag_can_reassemble(skb, neigh_node->if_incoming->net_dev->mtu)) {
 
-		ret = frag_reassemble_skb(skb, bat_priv, &new_skb);
+		ret = frag_reassemble_skb(skb, orig_node->bat_priv, &new_skb);
 
 		if (ret == NET_RX_DROP)
 			goto out;
@@ -1254,6 +1249,7 @@ int recv_unicast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 {
 	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
 	struct unicast_packet *unicast_packet;
+	struct orig_node *orig_node;
 	int hdr_size = sizeof(struct unicast_packet);
 
 	if (check_unicast_packet(skb, hdr_size) < 0)
@@ -1267,14 +1263,16 @@ int recv_unicast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 		return NET_RX_SUCCESS;
 	}
 
-	return route_unicast_packet(bat_priv, skb, recv_if,
-		unicast_packet->dest, unicast_packet->header.packet_type);
+	orig_node = hash_find_orig(bat_priv, unicast_packet->dest);
+	return route_unicast_packet(skb, recv_if, orig_node,
+				    unicast_packet->header.packet_type);
 }
 
 int recv_ucast_frag_packet(struct sk_buff *skb, struct batman_if *recv_if)
 {
 	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
 	struct unicast_frag_packet *unicast_packet;
+	struct orig_node *orig_node;
 	int hdr_size = sizeof(struct unicast_frag_packet);
 	struct sk_buff *new_skb = NULL;
 	int ret;
@@ -1301,8 +1299,9 @@ int recv_ucast_frag_packet(struct sk_buff *skb, struct batman_if *recv_if)
 		return NET_RX_SUCCESS;
 	}
 
-	return route_unicast_packet(bat_priv, skb, recv_if,
-		unicast_packet->dest, unicast_packet->header.packet_type);
+	orig_node = hash_find_orig(bat_priv, unicast_packet->dest);
+	return route_unicast_packet(skb, recv_if, orig_node,
+				    unicast_packet->header.packet_type);
 }
 
 
