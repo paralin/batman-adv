@@ -30,7 +30,7 @@
 int frag_reassemble_skb(struct sk_buff *skb, struct bat_priv *bat_priv,
 			struct sk_buff **new_skb);
 void frag_list_free(struct list_head *head);
-void frag_packet_list(struct bat_priv *bat_priv,
+void frag_packet_list(int bonding, struct bat_priv *bat_priv,
 		      struct hlist_head *packet_list);
 int unicast_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv);
 

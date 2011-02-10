@@ -30,6 +30,7 @@
 #define BAT_BCAST        0x04
 #define BAT_VIS          0x05
 #define BAT_UNICAST_FRAG 0x06
+#define BAT_UNICAST_SAFE 0x07
 
 /* this file is included by batctl which needs these defines */
 #define COMPAT_VERSION 12
@@ -99,6 +100,13 @@ struct icmp_packet_rr {
 struct unicast_packet {
 	struct   batman_header header;
 	uint8_t  dest[6];
+} __packed;
+
+struct unicast_packet_safe {
+	struct   batman_header header;
+	uint8_t  dest[6];
+	uint8_t  orig[6];
+	uint32_t seqno;
 } __packed;
 
 struct unicast_frag_packet {

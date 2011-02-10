@@ -1018,10 +1018,77 @@ out:
 	return ret;
 }
 
+static int unicast_to_unicast_safe(struct sk_buff *skb,
+				   struct bat_priv *bat_priv)
+{
+	struct unicast_packet unicast_packet;
+	struct unicast_packet_safe *unicast_packet_safe;
+
+	memcpy(&unicast_packet, skb->data, sizeof(unicast_packet));
+	if (my_skb_head_push(skb, sizeof(struct unicast_packet_safe) -
+				sizeof(struct unicast_packet)) < 0)
+		return -1;
+
+	unicast_packet_safe = (struct unicast_packet_safe *) skb->data;
+	unicast_packet_safe->header = unicast_packet.header;
+	memcpy(unicast_packet_safe->dest, unicast_packet.dest, ETH_ALEN);
+	unicast_packet_safe->header.packet_type = BAT_UNICAST_SAFE;
+	memcpy(unicast_packet_safe->orig,
+	       bat_priv->primary_if->net_dev->dev_addr, ETH_ALEN);
+	unicast_packet_safe->seqno =
+				htonl(atomic_inc_return(&bat_priv->dup_seqno));
+
+	return 0;
+}
+
+static void red_bonding_copy(struct sk_buff *skb, struct list_head *bond_list,
+			     struct hlist_head *packet_list,
+			     struct bat_priv *bat_priv)
+{
+	struct neigh_node *neigh_node;
+	struct packet_list_entry *entry;
+	int num_entries = 0;
+	int packet_type = ((struct batman_header *) skb->data)->packet_type;
+
+	/* We only expect either BAT_UNICAST or BAT_UNICAST_SAFE here */
+	if (packet_type == BAT_UNICAST) {
+		if (unicast_to_unicast_safe(skb, bat_priv) < 0) {
+			kfree_skb(skb);
+			return;
+		}
+	}
+
+	list_for_each_entry_rcu(neigh_node, bond_list, bonding_list) {
+		entry = kmalloc(sizeof(struct packet_list_entry), GFP_ATOMIC);
+		if (!entry) {
+			kfree_skb(skb);
+			return;
+		}
+		if (!num_entries)
+			entry->skb = skb;
+		else {
+			entry->skb = skb_copy(skb, GFP_ATOMIC);
+			if (!entry->skb) {
+				kfree_skb(skb);
+				kfree(entry);
+				return;
+			}
+		}
+		entry->neigh_node = neigh_node;
+		if (!atomic_inc_not_zero(&neigh_node->refcount)) {
+			kfree_skb(entry->skb);
+			kfree(entry);
+			continue;
+		}
+		hlist_add_head(&entry->list, packet_list);
+		num_entries++;
+	}
+}
+
 /* find a suitable router for this originator, and use
  * bonding if possible. increases the found neighbors
  * refcount.*/
-static void find_router(struct orig_node *orig_node,
+static void find_router(int bonding_mode, struct orig_node *orig_node,
 			struct hard_iface *recv_if,
 			struct sk_buff *skb,
 			struct hlist_head *packet_list)
@@ -1032,7 +1099,6 @@ static void find_router(struct orig_node *orig_node,
 	struct neigh_node *router, *first_candidate, *tmp_neigh_node;
 	struct packet_list_entry *entry;
 	static uint8_t zero_mac[ETH_ALEN] = {0, 0, 0, 0, 0, 0};
-	int bonding_enabled;
 
 	if (!orig_node)
 		return;
@@ -1044,7 +1110,6 @@ static void find_router(struct orig_node *orig_node,
 
 	/* without bonding, the first node should
 	 * always choose the default router. */
-	bonding_enabled = atomic_read(&bat_priv->bonding);
 
 	rcu_read_lock();
 	/* select default router to output */
@@ -1055,7 +1120,7 @@ static void find_router(struct orig_node *orig_node,
 		return;
 	}
 
-	if ((!recv_if) && (!bonding_enabled))
+	if ((!recv_if) && (!bonding_mode))
 		goto return_router;
 
 	/* if we have something in the primary_addr, we can search
@@ -1091,7 +1156,7 @@ static void find_router(struct orig_node *orig_node,
 	first_candidate = NULL;
 	router = NULL;
 
-	if (bonding_enabled) {
+	if (bonding_mode == THROUGHPUT_BONDING) {
 		/* in the bonding case, send the packets in a round
 		 * robin fashion over the remaining interfaces. */
 
@@ -1127,6 +1192,11 @@ static void find_router(struct orig_node *orig_node,
 				&router->bonding_list);
 		spin_unlock_bh(&primary_orig_node->neigh_list_lock);
 
+	} else if (bonding_mode == REDUNDANT_BONDING) {
+		red_bonding_copy(skb, &primary_orig_node->bond_list,
+				 packet_list, bat_priv);
+		rcu_read_unlock();
+		return;
 	} else {
 		/* if bonding is disabled, use the best of the
 		 * remaining candidates which are not using
@@ -1203,11 +1273,15 @@ static int check_unicast_packet(struct sk_buff *skb, int hdr_size)
 	return 0;
 }
 
-int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if,
+int route_unicast_packet(int bonding_mode, struct sk_buff *skb,
+			 struct hard_iface *recv_if,
 			 struct orig_node *orig_node)
 {
 	int ret = NET_RX_DROP;
 	struct hlist_head packet_list;
+
+	if (!orig_node)
+		goto out;
 
 	INIT_HLIST_HEAD(&packet_list);
 
@@ -1216,10 +1290,10 @@ int route_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if,
 		goto out;
 
 	/* creates the (initial) packet list */
-	find_router(orig_node, recv_if, skb, &packet_list);
+	find_router(bonding_mode, orig_node, recv_if, skb, &packet_list);
 
 	/* split packets that won't fit or maybe buffer fragments */
-	frag_packet_list(orig_node->bat_priv, &packet_list);
+	frag_packet_list(bonding_mode, orig_node->bat_priv, &packet_list);
 
 	/* route them */
 	send_packet_list(&packet_list);
@@ -1238,6 +1312,7 @@ int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	struct unicast_packet *unicast_packet;
 	struct orig_node *orig_node;
 	int hdr_size = sizeof(struct unicast_packet);
+	int bonding_mode;
 
 	if (check_unicast_packet(skb, hdr_size) < 0)
 		return NET_RX_DROP;
@@ -1250,8 +1325,10 @@ int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 		return NET_RX_SUCCESS;
 	}
 
+	bonding_mode = atomic_read(&bat_priv->bonding) <<
+			atomic_read(&bat_priv->red_bonding);
 	orig_node = orig_hash_find(bat_priv, unicast_packet->dest);
-	return route_unicast_packet(skb, recv_if, orig_node);
+	return route_unicast_packet(bonding_mode, skb, recv_if, orig_node);
 }
 
 int recv_ucast_frag_packet(struct sk_buff *skb, struct hard_iface *recv_if)
@@ -1261,7 +1338,7 @@ int recv_ucast_frag_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	struct orig_node *orig_node;
 	int hdr_size = sizeof(struct unicast_frag_packet);
 	struct sk_buff *new_skb = NULL;
-	int ret;
+	int ret, bonding_mode;
 
 	if (check_unicast_packet(skb, hdr_size) < 0)
 		return NET_RX_DROP;
@@ -1285,8 +1362,26 @@ int recv_ucast_frag_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 		return NET_RX_SUCCESS;
 	}
 
+	/* The redundant bonding mode currently cannot handle fragmented
+	 * packets, therefore need to defrag them first */
+	bonding_mode = atomic_read(&bat_priv->bonding) <<
+			atomic_read(&bat_priv->red_bonding);
+
+	if (bonding_mode == REDUNDANT_BONDING) {
+		ret = frag_reassemble_skb(skb, bat_priv, &new_skb);
+
+		if (ret == NET_RX_DROP)
+			return NET_RX_DROP;
+
+		/* packet was buffered for late merge */
+		if (!new_skb)
+			return NET_RX_SUCCESS;
+
+		skb = new_skb;
+	}
+
 	orig_node = orig_hash_find(bat_priv, unicast_packet->dest);
-	return route_unicast_packet(skb, recv_if, orig_node);
+	return route_unicast_packet(bonding_mode, skb, recv_if, orig_node);
 }
 
 

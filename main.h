@@ -97,6 +97,11 @@
  *  Vis
  */
 
+/* Bonding modes */
+#define THROUGHPUT_BONDING	1
+#define REDUNDANT_BONDING	2
+
+
 /*
  * Kernel headers
  */
