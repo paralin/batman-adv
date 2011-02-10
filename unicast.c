@@ -30,7 +30,6 @@
 #include "routing.h"
 #include "hard-interface.h"
 
-
 static struct sk_buff *frag_merge_packet(struct list_head *head,
 					 struct frag_packet_list_entry *tfp,
 					 struct sk_buff *skb)
@@ -333,7 +332,7 @@ static inline int frag_can_reassemble(struct sk_buff *skb, int mtu)
 	return merged_size <= mtu;
 }
 
-void frag_packet_list(struct bat_priv *bat_priv,
+void frag_packet_list(int bonding, struct bat_priv *bat_priv,
 		      struct hlist_head *packet_list)
 {
 	struct packet_list_entry *entry;
@@ -347,6 +346,7 @@ void frag_packet_list(struct bat_priv *bat_priv,
 		switch (packet_type) {
 		case BAT_UNICAST:
 			if (!atomic_read(&bat_priv->fragmentation) ||
+			    bonding == REDUNDANT_BONDING ||
 			    entry->skb->len <=
 			    entry->neigh_node->if_incoming->net_dev->mtu)
 				break;
@@ -372,7 +372,7 @@ int unicast_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv)
 	struct ethhdr *ethhdr = (struct ethhdr *)skb->data;
 	struct unicast_packet *unicast_packet;
 	struct orig_node *orig_node;
-	int ret = NET_RX_DROP;
+	int ret = NET_RX_DROP, bonding_mode;
 
 	/* get routing information */
 	if (is_multicast_ether_addr(ethhdr->h_dest)) {
@@ -398,7 +398,9 @@ route:
 	/* copy the destination for faster routing */
 	memcpy(unicast_packet->dest, orig_node->orig, ETH_ALEN);
 
-	ret = route_unicast_packet(skb, NULL, orig_node);
+	bonding_mode = atomic_read(&bat_priv->bonding) <<
+			atomic_read(&bat_priv->red_bonding);
+	ret = route_unicast_packet(bonding_mode, skb, NULL, orig_node);
 
 out:
 	if (ret == NET_RX_DROP)

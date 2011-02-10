@@ -443,7 +443,7 @@ void interface_rx(struct net_device *soft_iface,
 	struct ethhdr *ethhdr;
 	struct vlan_ethhdr *vhdr;
 	short vid = -1;
-	int ret;
+	int ret, bonding_mode;
 
 	/* check if enough space is available for pulling, and pull */
 	if (!pskb_may_pull(skb, hdr_size))
@@ -484,8 +484,11 @@ void interface_rx(struct net_device *soft_iface,
 		memcpy(unicast_packet->dest,
 		       bat_priv->softif_neigh->addr, ETH_ALEN);
 
+		bonding_mode = atomic_read(&bat_priv->bonding) <<
+				atomic_read(&bat_priv->red_bonding);
 		orig_node = hash_find_orig(bat_priv, unicast_packet->dest);
-		ret = route_unicast_packet(skb, recv_if, orig_node);
+		ret = route_unicast_packet(bonding_mode, skb, recv_if,
+					   orig_node);
 		if (ret == NET_RX_DROP)
 			goto dropped;
 
@@ -604,6 +607,7 @@ struct net_device *softif_create(char *name)
 
 	atomic_set(&bat_priv->mesh_state, MESH_INACTIVE);
 	atomic_set(&bat_priv->bcast_seqno, 1);
+	atomic_set(&bat_priv->dup_seqno, 1);
 	atomic_set(&bat_priv->hna_local_changed, 0);
 
 	bat_priv->primary_if = NULL;
