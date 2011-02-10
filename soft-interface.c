@@ -466,8 +466,7 @@ void interface_rx(struct net_device *soft_iface,
 		       bat_priv->softif_neigh->addr, ETH_ALEN);
 
 		orig_node = orig_hash_find(bat_priv, unicast_packet->dest);
-		ret = route_unicast_packet(skb, recv_if, orig_node,
-					   unicast_packet->header.packet_type);
+		ret = route_unicast_packet(skb, recv_if, orig_node);
 		if (ret == NET_RX_DROP)
 			goto dropped;
 

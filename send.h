@@ -22,9 +22,16 @@
 #ifndef _NET_BATMAN_ADV_SEND_H_
 #define _NET_BATMAN_ADV_SEND_H_
 
+struct packet_list_entry {
+	struct hlist_node list;
+	struct sk_buff *skb;
+	struct neigh_node *neigh_node;
+};
+
 int send_skb_packet(struct sk_buff *skb,
 				struct hard_iface *hard_iface,
 				uint8_t *dst_addr);
+void send_packet_list(struct hlist_head *packet_list);
 void schedule_own_packet(struct hard_iface *hard_iface);
 void schedule_forward_packet(struct orig_node *orig_node,
 			     struct ethhdr *ethhdr,
