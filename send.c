@@ -196,6 +196,20 @@ send_skb_err:
 	return NET_XMIT_DROP;
 }
 
+void send_packet_list(struct hlist_head *packet_list)
+{
+	struct packet_list_entry *entry;
+	struct hlist_node *pos, *tmp;
+
+	hlist_for_each_entry_safe(entry, pos, tmp, packet_list, list) {
+		send_skb_packet(entry->skb, entry->neigh_node->if_incoming,
+				entry->neigh_node->addr);
+		neigh_node_free_ref(entry->neigh_node);
+		hlist_del(&entry->list);
+		kfree(entry);
+	}
+}
+
 /* Send a packet to a given interface */
 static void send_packet_to_if(struct forw_packet *forw_packet,
 			      struct batman_if *batman_if)

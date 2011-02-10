@@ -30,29 +30,8 @@
 int frag_reassemble_skb(struct sk_buff *skb, struct bat_priv *bat_priv,
 			struct sk_buff **new_skb);
 void frag_list_free(struct list_head *head);
+void frag_packet_list(struct bat_priv *bat_priv,
+		      struct hlist_head *packet_list);
 int unicast_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv);
-int frag_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv,
-		  struct batman_if *batman_if, uint8_t dstaddr[]);
-
-static inline int frag_can_reassemble(struct sk_buff *skb, int mtu)
-{
-	struct unicast_frag_packet *unicast_packet;
-	int uneven_correction = 0;
-	unsigned int merged_size;
-
-	unicast_packet = (struct unicast_frag_packet *)skb->data;
-
-	if (unicast_packet->flags & UNI_FRAG_LARGETAIL) {
-		if (unicast_packet->flags & UNI_FRAG_HEAD)
-			uneven_correction = 1;
-		else
-			uneven_correction = -1;
-	}
-
-	merged_size = (skb->len - sizeof(struct unicast_frag_packet)) * 2;
-	merged_size += sizeof(struct unicast_packet) + uneven_correction;
-
-	return merged_size <= mtu;
-}
 
 #endif /* _NET_BATMAN_ADV_UNICAST_H_ */

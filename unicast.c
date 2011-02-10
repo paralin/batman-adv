@@ -217,17 +217,43 @@ out:
 	return ret;
 }
 
-int frag_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv,
-		  struct batman_if *batman_if, uint8_t dstaddr[])
+static void frag_reassemble_packet(struct packet_list_entry *entry,
+			      struct bat_priv *bat_priv)
+{
+	struct sk_buff *new_skb = NULL;
+	int ret;
+
+	ret = frag_reassemble_skb(entry->skb, bat_priv, &new_skb);
+
+	/* Could reassemble packet, leave this new one in list */
+	if (new_skb) {
+		entry->skb = new_skb;
+		return;
+	}
+
+	/* merge failed */
+	if (ret == NET_RX_DROP)
+		kfree_skb(entry->skb);
+
+	/* merge failed or skb is buffered, remove from send list */
+	neigh_node_free_ref(entry->neigh_node);
+	hlist_del(&entry->list);
+	kfree(entry);
+}
+
+static void frag_skb(struct packet_list_entry *entry, struct bat_priv *bat_priv)
 {
 	struct unicast_packet tmp_uc, *unicast_packet;
 	struct sk_buff *frag_skb;
 	struct unicast_frag_packet *frag1, *frag2;
+	struct packet_list_entry *frag_entry;
 	int uc_hdr_len = sizeof(struct unicast_packet);
 	int ucf_hdr_len = sizeof(struct unicast_frag_packet);
-	int data_len = skb->len - uc_hdr_len;
+	int data_len = entry->skb->len - uc_hdr_len;
 	int large_tail = 0;
 	uint16_t seqno;
+	struct sk_buff *skb = entry->skb;
+	struct batman_if *batman_if = entry->neigh_node->if_incoming;
 
 	if (!bat_priv->primary_if)
 		goto dropped;
@@ -266,15 +292,79 @@ int frag_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv,
 	frag1->seqno = htons(seqno - 1);
 	frag2->seqno = htons(seqno);
 
-	send_skb_packet(skb, batman_if, dstaddr);
-	send_skb_packet(frag_skb, batman_if, dstaddr);
-	return NET_RX_SUCCESS;
+	frag_entry = kmalloc(sizeof(struct packet_list_entry), GFP_ATOMIC);
+	if (!frag_entry)
+		goto drop_frag;
+
+	if (!atomic_inc_not_zero(&entry->neigh_node->refcount))
+		goto drop_frag;
+
+	frag_entry->skb = frag_skb;
+	frag_entry->neigh_node = entry->neigh_node;
+	hlist_add_before(&frag_entry->list, &entry->list);
 
 drop_frag:
 	kfree_skb(frag_skb);
 dropped:
 	kfree_skb(skb);
-	return NET_RX_DROP;
+	neigh_node_free_ref(entry->neigh_node);
+	hlist_del(&entry->list);
+	kfree(entry);
+}
+
+static inline int frag_can_reassemble(struct sk_buff *skb, int mtu)
+{
+	struct unicast_frag_packet *unicast_packet;
+	int uneven_correction = 0;
+	unsigned int merged_size;
+
+	unicast_packet = (struct unicast_frag_packet *)skb->data;
+
+	if (unicast_packet->flags & UNI_FRAG_LARGETAIL) {
+		if (unicast_packet->flags & UNI_FRAG_HEAD)
+			uneven_correction = 1;
+		else
+			uneven_correction = -1;
+	}
+
+	merged_size = (skb->len - 2 * sizeof(struct unicast_frag_packet));
+	merged_size += sizeof(struct unicast_packet) + uneven_correction;
+
+	return merged_size <= mtu;
+}
+
+void frag_packet_list(struct bat_priv *bat_priv,
+		      struct hlist_head *packet_list)
+{
+	struct packet_list_entry *entry;
+	struct hlist_node *pos, *tmp;
+	uint8_t packet_type;
+
+	hlist_for_each_entry_safe(entry, pos, tmp, packet_list, list) {
+		packet_type = ((struct batman_header *)
+				entry->skb->data)->packet_type;
+
+		switch (packet_type) {
+		case BAT_UNICAST:
+			if (!atomic_read(&bat_priv->fragmentation) ||
+			    entry->skb->len <=
+			    entry->neigh_node->if_incoming->net_dev->mtu)
+				break;
+
+			frag_skb(entry, bat_priv);
+			break;
+		case BAT_UNICAST_FRAG:
+			if (!frag_can_reassemble(entry->skb,
+			      entry->neigh_node->if_incoming->net_dev->mtu))
+				break;
+
+			frag_reassemble_packet(entry, bat_priv);
+			break;
+		default:
+			/* We should never be here... */
+			break;
+		}
+	}
 }
 
 int unicast_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv)
@@ -308,8 +398,7 @@ route:
 	/* copy the destination for faster routing */
 	memcpy(unicast_packet->dest, orig_node->orig, ETH_ALEN);
 
-	ret = route_unicast_packet(skb, NULL, orig_node,
-				   unicast_packet->header.packet_type);
+	ret = route_unicast_packet(skb, NULL, orig_node);
 
 out:
 	if (ret == NET_RX_DROP)

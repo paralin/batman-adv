@@ -1020,21 +1020,24 @@ out:
 /* find a suitable router for this originator, and use
  * bonding if possible. increases the found neighbors
  * refcount.*/
-struct neigh_node *find_router(struct orig_node *orig_node,
-			       struct batman_if *recv_if)
+static void find_router(struct orig_node *orig_node,
+			struct batman_if *recv_if,
+			struct sk_buff *skb,
+			struct hlist_head *packet_list)
 {
 	struct bat_priv *bat_priv;
 	struct orig_node *primary_orig_node;
 	struct orig_node *router_orig;
 	struct neigh_node *router, *first_candidate, *tmp_neigh_node;
+	struct packet_list_entry *entry;
 	static uint8_t zero_mac[ETH_ALEN] = {0, 0, 0, 0, 0, 0};
 	int bonding_enabled;
 
 	if (!orig_node)
-		return NULL;
+		return;
 
 	if (!orig_node->router)
-		return NULL;
+		return;
 
 	bat_priv = orig_node->bat_priv;
 
@@ -1048,7 +1051,7 @@ struct neigh_node *find_router(struct orig_node *orig_node,
 	router_orig = orig_node->router->orig_node;
 	if (!router_orig || !atomic_inc_not_zero(&router->refcount)) {
 		rcu_read_unlock();
-		return NULL;
+		return;
 	}
 
 	if ((!recv_if) && (!bonding_enabled))
@@ -1110,7 +1113,7 @@ struct neigh_node *find_router(struct orig_node *orig_node,
 
 		if (!router) {
 			rcu_read_unlock();
-			return NULL;
+			return;
 		}
 
 		/* selected should point to the next element
@@ -1162,7 +1165,16 @@ struct neigh_node *find_router(struct orig_node *orig_node,
 	}
 return_router:
 	rcu_read_unlock();
-	return router;
+
+	entry = kmalloc(sizeof(struct packet_list_entry), GFP_ATOMIC);
+	if (!entry) {
+		kfree_skb(skb);
+		return;
+	}
+
+	entry->skb = skb;
+	entry->neigh_node = router;
+	hlist_add_head(&entry->list, packet_list);
 }
 
 static int check_unicast_packet(struct sk_buff *skb, int hdr_size)
@@ -1191,55 +1203,29 @@ static int check_unicast_packet(struct sk_buff *skb, int hdr_size)
 }
 
 int route_unicast_packet(struct sk_buff *skb, struct batman_if *recv_if,
-			 struct orig_node *orig_node, uint8_t packet_type)
+			 struct orig_node *orig_node)
 {
-	struct neigh_node *neigh_node = NULL;
 	int ret = NET_RX_DROP;
-	struct sk_buff *new_skb;
+	struct hlist_head packet_list;
 
-	/* find_router() increases neigh_nodes refcount if found. */
-	neigh_node = find_router(orig_node, recv_if);
-
-	if (!neigh_node)
-		goto out;
+	INIT_HLIST_HEAD(&packet_list);
 
 	/* create a copy of the skb, if needed, to modify it. */
 	if (skb_cow(skb, sizeof(struct ethhdr)) < 0)
 		goto out;
 
-	if (packet_type == BAT_UNICAST &&
-	    atomic_read(&orig_node->bat_priv->fragmentation) &&
-	    skb->len > neigh_node->if_incoming->net_dev->mtu) {
-		ret = frag_send_skb(skb, orig_node->bat_priv,
-				    neigh_node->if_incoming, neigh_node->addr);
-		goto out;
-	}
+	/* creates the (initial) packet list */
+	find_router(orig_node, recv_if, skb, &packet_list);
 
-	if (packet_type == BAT_UNICAST_FRAG &&
-	    frag_can_reassemble(skb, neigh_node->if_incoming->net_dev->mtu)) {
+	/* split packets that won't fit or maybe buffer fragments */
+	frag_packet_list(orig_node->bat_priv, &packet_list);
 
-		ret = frag_reassemble_skb(skb, orig_node->bat_priv, &new_skb);
-
-		if (ret == NET_RX_DROP)
-			goto out;
-
-		/* packet was buffered for late merge */
-		if (!new_skb) {
-			ret = NET_RX_SUCCESS;
-			goto out;
-		}
-
-		skb = new_skb;
-	}
-
-	/* route it */
-	send_skb_packet(skb, neigh_node->if_incoming, neigh_node->addr);
+	/* route them */
+	send_packet_list(&packet_list);
 	ret = NET_RX_SUCCESS;
 	goto out;
 
 out:
-	if (neigh_node)
-		neigh_node_free_ref(neigh_node);
 	if (orig_node)
 		kref_put(&orig_node->refcount, orig_node_free_ref);
 	return ret;
@@ -1264,8 +1250,7 @@ int recv_unicast_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	}
 
 	orig_node = hash_find_orig(bat_priv, unicast_packet->dest);
-	return route_unicast_packet(skb, recv_if, orig_node,
-				    unicast_packet->header.packet_type);
+	return route_unicast_packet(skb, recv_if, orig_node);
 }
 
 int recv_ucast_frag_packet(struct sk_buff *skb, struct batman_if *recv_if)
@@ -1300,8 +1285,7 @@ int recv_ucast_frag_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	}
 
 	orig_node = hash_find_orig(bat_priv, unicast_packet->dest);
-	return route_unicast_packet(skb, recv_if, orig_node,
-				    unicast_packet->header.packet_type);
+	return route_unicast_packet(skb, recv_if, orig_node);
 }
 
 
