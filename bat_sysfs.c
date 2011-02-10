@@ -356,8 +356,17 @@ static ssize_t store_gw_bwidth(struct kobject *kobj, struct attribute *attr,
 	return gw_bandwidth_set(net_dev, buff, count);
 }
 
+static void print_bonding_notice(struct net_device *net_dev)
+{
+	bat_info(net_dev, "Redundant Bonding mode is currently not compatible "
+			"with batman-adv's link layer fragmentation and will "
+			"be ignored. Also make sure to activate general "
+			"bonding for redundant bonding to take effect.\n");
+}
+
 BAT_ATTR_BOOL(aggregated_ogms, S_IRUGO | S_IWUSR, NULL);
 BAT_ATTR_BOOL(bonding, S_IRUGO | S_IWUSR, NULL);
+BAT_ATTR_BOOL(red_bonding, S_IRUGO | S_IWUSR, print_bonding_notice);
 BAT_ATTR_BOOL(fragmentation, S_IRUGO | S_IWUSR, update_min_mtu);
 static BAT_ATTR(vis_mode, S_IRUGO | S_IWUSR, show_vis_mode, store_vis_mode);
 static BAT_ATTR(gw_mode, S_IRUGO | S_IWUSR, show_gw_mode, store_gw_mode);
@@ -374,6 +383,7 @@ BAT_ATTR_UINT(log_level, S_IRUGO | S_IWUSR, 0, 3, NULL);
 static struct bat_attribute *mesh_attrs[] = {
 	&bat_attr_aggregated_ogms,
 	&bat_attr_bonding,
+	&bat_attr_red_bonding,
 	&bat_attr_fragmentation,
 	&bat_attr_vis_mode,
 	&bat_attr_gw_mode,
