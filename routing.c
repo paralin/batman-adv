@@ -1293,6 +1293,36 @@ static int check_unicast_packet(struct sk_buff *skb, int hdr_size)
 	return 0;
 }
 
+static inline int check_duplicate(struct bat_priv *bat_priv, uint32_t seqno,
+				  struct seqno_state *seqno_state,
+				  spinlock_t *seqno_lock)
+{
+	int32_t seq_diff;
+	int ret = NET_RX_DROP;
+
+	spin_lock_bh(seqno_lock);
+
+	/* check whether the packet is a duplicate */
+	if (get_bit_status(seqno_state->bits, seqno_state->last_seqno, seqno))
+		goto spin_unlock;
+
+	seq_diff = seqno - seqno_state->last_seqno;
+
+	/* check whether the packet is old and the host just restarted. */
+	if (window_protected(bat_priv, seq_diff, &seqno_state->seqno_reset))
+		goto spin_unlock;
+
+	/* mark broadcast in flood history, update window position
+	 * if required. */
+	if (bit_get_packet(bat_priv, seqno_state->bits, seq_diff, 1))
+		seqno_state->last_seqno = seqno;
+
+	ret = NET_RX_SUCCESS;
+spin_unlock:
+	spin_unlock_bh(seqno_lock);
+	return ret;
+}
+
 int route_unicast_packet(int bonding_mode, struct sk_buff *skb,
 			 struct hard_iface *recv_if,
 			 struct orig_node *orig_node)
@@ -1433,7 +1463,7 @@ int recv_ucast_safe_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	else
 		set_unicast_safe_options(bat_priv, unicast_packet);
 
-	orig_node = hash_find_orig(bat_priv, unicast_packet->dest);
+	orig_node = orig_hash_find(bat_priv, unicast_packet->dest);
 	return route_unicast_packet(bonding_mode, skb, recv_if, orig_node);
 }
 
@@ -1445,7 +1475,6 @@ int recv_bcast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	struct ethhdr *ethhdr;
 	int hdr_size = sizeof(struct bcast_packet);
 	int ret = NET_RX_DROP;
-	int32_t seq_diff;
 
 	/* drop packet if it has not necessary minimum size */
 	if (unlikely(!pskb_may_pull(skb, hdr_size)))
@@ -1479,26 +1508,13 @@ int recv_bcast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 
 	rcu_read_unlock();
 
-	spin_lock_bh(&orig_node->bcast_seqno_lock);
+	ret = check_duplicate(bat_priv, ntohl(bcast_packet->seqno),
+			      &orig_node->bcast_seqno_state,
+			      &orig_node->bcast_seqno_lock);
 
-	/* check whether the packet is a duplicate */
-	if (get_bit_status(orig_node->bcast_bits, orig_node->last_bcast_seqno,
-			   ntohl(bcast_packet->seqno)))
-		goto spin_unlock;
-
-	seq_diff = ntohl(bcast_packet->seqno) - orig_node->last_bcast_seqno;
-
-	/* check whether the packet is old and the host just restarted. */
-	if (window_protected(bat_priv, seq_diff,
-			     &orig_node->bcast_seqno_reset))
-		goto spin_unlock;
-
-	/* mark broadcast in flood history, update window position
-	 * if required. */
-	if (bit_get_packet(bat_priv, orig_node->bcast_bits, seq_diff, 1))
-		orig_node->last_bcast_seqno = ntohl(bcast_packet->seqno);
-
-	spin_unlock_bh(&orig_node->bcast_seqno_lock);
+	orig_node_free_ref(orig_node);
+	if (ret == NET_RX_DROP)
+		goto out;
 
 	/* rebroadcast packet */
 	add_bcast_packet_to_list(bat_priv, skb);
@@ -1510,12 +1526,7 @@ int recv_bcast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 
 rcu_unlock:
 	rcu_read_unlock();
-	goto out;
-spin_unlock:
-	spin_unlock_bh(&orig_node->bcast_seqno_lock);
 out:
-	if (orig_node)
-		orig_node_free_ref(orig_node);
 	return ret;
 }
 
