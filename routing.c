@@ -1439,12 +1439,24 @@ int recv_ucast_safe_packet(struct sk_buff *skb, struct batman_if *recv_if)
 	struct unicast_packet_safe *unicast_packet;
 	struct orig_node *orig_node;
 	int hdr_size = sizeof(struct unicast_packet);
-	int bonding_mode;
+	int ret, bonding_mode;
 
 	if (check_unicast_packet(skb, hdr_size) < 0)
 		return NET_RX_DROP;
 
 	unicast_packet = (struct unicast_packet_safe *)skb->data;
+
+	orig_node = hash_find_orig(bat_priv, unicast_packet->orig);
+	if (!orig_node)
+		return NET_RX_DROP;
+
+	ret = check_duplicate(bat_priv, ntohl(unicast_packet->seqno),
+			      &orig_node->ucast_safe_seqno_state,
+			      &orig_node->ucast_safe_seqno_lock);
+
+	kref_put(&orig_node->refcount, orig_node_free_ref);
+	if (ret == NET_RX_DROP)
+		return NET_RX_DROP;
 
 	/* packet for me */
 	if (is_my_mac(unicast_packet->dest)) {

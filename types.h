@@ -91,11 +91,13 @@ struct orig_node {
 	struct bat_priv *bat_priv;
 	unsigned long last_frag_packet;
 	struct seqno_state bcast_seqno_state;
+	struct seqno_state ucast_safe_seqno_state;
 	spinlock_t ogm_cnt_lock; /* protects: bcast_own, bcast_own_sum,
 				  * neigh_node->real_bits,
 				  * neigh_node->real_packet_count */
 	spinlock_t bcast_seqno_lock; /* protects bcast_bits,
 				      *	 last_bcast_seqno */
+	spinlock_t ucast_safe_seqno_lock; /* protects ucast_safe_seqno_state */
 	atomic_t bond_candidates;
 	struct list_head bond_list;
 };
