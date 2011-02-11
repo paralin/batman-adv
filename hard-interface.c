@@ -624,6 +624,11 @@ static int batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 		ret = recv_ucast_frag_packet(skb, hard_iface);
 		break;
 
+		/* fragmented unicast packet */
+	case BAT_UNICAST_SAFE:
+		ret = recv_ucast_safe_packet(skb, hard_iface);
+		break;
+
 		/* broadcast packet */
 	case BAT_BCAST:
 		ret = recv_bcast_packet(skb, hard_iface);

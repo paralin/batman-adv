@@ -1018,6 +1018,29 @@ out:
 	return ret;
 }
 
+static void unicast_safe_to_unicast(struct sk_buff *skb)
+{
+	struct unicast_packet_safe unicast_packet_safe;
+	struct unicast_packet *unicast_packet;
+
+	unicast_packet_safe = *((struct unicast_packet_safe *)skb->data);
+	unicast_packet = (struct unicast_packet *) skb_pull(skb,
+					sizeof(struct unicast_packet_safe) -
+					sizeof(struct unicast_packet));
+
+	unicast_packet->header = unicast_packet_safe.header;
+	unicast_packet->header.packet_type = BAT_UNICAST;
+	memcpy(unicast_packet->dest, unicast_packet_safe.dest, ETH_ALEN);
+}
+
+static void set_unicast_safe_options(struct bat_priv *bat_priv,
+				struct unicast_packet_safe *unicast_packet)
+{
+	memcpy(unicast_packet->orig, bat_priv->primary_if->net_dev->dev_addr,
+	       ETH_ALEN);
+	unicast_packet->seqno = htonl(atomic_inc_return(&bat_priv->dup_seqno));
+}
+
 static int unicast_to_unicast_safe(struct sk_buff *skb,
 				   struct bat_priv *bat_priv)
 {
@@ -1033,10 +1056,7 @@ static int unicast_to_unicast_safe(struct sk_buff *skb,
 	unicast_packet_safe->header = unicast_packet.header;
 	memcpy(unicast_packet_safe->dest, unicast_packet.dest, ETH_ALEN);
 	unicast_packet_safe->header.packet_type = BAT_UNICAST_SAFE;
-	memcpy(unicast_packet_safe->orig,
-	       bat_priv->primary_if->net_dev->dev_addr, ETH_ALEN);
-	unicast_packet_safe->seqno =
-				htonl(atomic_inc_return(&bat_priv->dup_seqno));
+	set_unicast_safe_options(bat_priv, unicast_packet_safe);
 
 	return 0;
 }
@@ -1384,6 +1404,38 @@ int recv_ucast_frag_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	return route_unicast_packet(bonding_mode, skb, recv_if, orig_node);
 }
 
+int recv_ucast_safe_packet(struct sk_buff *skb, struct hard_iface *recv_if)
+{
+	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
+	struct unicast_packet_safe *unicast_packet;
+	struct orig_node *orig_node;
+	int hdr_size = sizeof(struct unicast_packet);
+	int bonding_mode;
+
+	if (check_unicast_packet(skb, hdr_size) < 0)
+		return NET_RX_DROP;
+
+	unicast_packet = (struct unicast_packet_safe *)skb->data;
+
+	/* packet for me */
+	if (is_my_mac(unicast_packet->dest)) {
+		unicast_safe_to_unicast(skb);
+
+		interface_rx(recv_if->soft_iface, skb, recv_if, hdr_size);
+		return NET_RX_SUCCESS;
+	}
+
+	bonding_mode = atomic_read(&bat_priv->bonding) <<
+			atomic_read(&bat_priv->red_bonding);
+
+	if (bonding_mode != REDUNDANT_BONDING)
+		unicast_safe_to_unicast(skb);
+	else
+		set_unicast_safe_options(bat_priv, unicast_packet);
+
+	orig_node = hash_find_orig(bat_priv, unicast_packet->dest);
+	return route_unicast_packet(bonding_mode, skb, recv_if, orig_node);
+}
 
 int recv_bcast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 {
