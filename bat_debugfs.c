@@ -257,6 +257,14 @@ static int mcast_mca_local_open(struct inode *inode, struct file *file)
 	return single_open(file, mcast_mca_local_seq_print_text, net_dev);
 }
 
+#ifdef CONFIG_BATMAN_ADV_BR_MC_SNOOP
+static int mcast_mca_bridge_open(struct inode *inode, struct file *file)
+{
+	struct net_device *net_dev = (struct net_device *)inode->i_private;
+	return single_open(file, mcast_mca_bridge_seq_print_text, net_dev);
+}
+#endif
+
 static int vis_data_open(struct inode *inode, struct file *file)
 {
 	struct net_device *net_dev = (struct net_device *)inode->i_private;
@@ -286,6 +294,9 @@ static BAT_DEBUGINFO(softif_neigh, S_IRUGO, softif_neigh_open);
 static BAT_DEBUGINFO(transtable_global, S_IRUGO, transtable_global_open);
 static BAT_DEBUGINFO(transtable_local, S_IRUGO, transtable_local_open);
 static BAT_DEBUGINFO(mcast_mca_local, S_IRUGO, mcast_mca_local_open);
+#ifdef CONFIG_BATMAN_ADV_BR_MC_SNOOP
+static BAT_DEBUGINFO(mcast_mca_bridge, S_IRUGO, mcast_mca_bridge_open);
+#endif
 static BAT_DEBUGINFO(vis_data, S_IRUGO, vis_data_open);
 
 static struct bat_debuginfo *mesh_debuginfos[] = {
@@ -295,6 +306,9 @@ static struct bat_debuginfo *mesh_debuginfos[] = {
 	&bat_debuginfo_transtable_global,
 	&bat_debuginfo_transtable_local,
 	&bat_debuginfo_mcast_mca_local,
+#ifdef CONFIG_BATMAN_ADV_BR_MC_SNOOP
+	&bat_debuginfo_mcast_mca_bridge,
+#endif
 	&bat_debuginfo_vis_data,
 	NULL,
 };

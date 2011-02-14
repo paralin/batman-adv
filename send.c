@@ -226,6 +226,9 @@ static void rebuild_batman_packet(struct bat_priv *bat_priv,
 	static int num_mca_prev = 0;
 	unsigned char *new_buff = NULL;
 	struct batman_packet *batman_packet;
+	struct list_head bridge_mc_list;
+
+	INIT_LIST_HEAD(&bridge_mc_list);
 
 	batman_packet = (struct batman_packet *)hard_iface->packet_buff;
 	mcast_group_awareness = atomic_read(&bat_priv->mcast_group_awareness);
@@ -235,6 +238,11 @@ static void rebuild_batman_packet(struct bat_priv *bat_priv,
 		netif_addr_lock_bh(hard_iface->soft_iface);
 		num_mca = netdev_mc_count(hard_iface->soft_iface);
 		netif_addr_unlock_bh(hard_iface->soft_iface);
+
+#ifdef CONFIG_BATMAN_ADV_BR_MC_SNOOP
+		num_mca += br_mc_snoop_list_adjacent(hard_iface->soft_iface,
+						     &bridge_mc_list);
+#endif
 	}
 
 	if (atomic_read(&bat_priv->hna_local_changed) ||
@@ -269,7 +277,8 @@ static void rebuild_batman_packet(struct bat_priv *bat_priv,
 	 * traverse the list anyway, so we can just do a memcpy instead of
 	 * memcmp for the sake of simplicity
 	 */
-	mcast_add_own_MCA(batman_packet, num_mca, hard_iface->soft_iface);
+	mcast_add_own_MCA(batman_packet, num_mca, &bridge_mc_list,
+			  hard_iface->soft_iface);
 
 	hard_iface->packet_len = sizeof(struct batman_packet) + ETH_ALEN *
 			(batman_packet->num_hna + batman_packet->num_mca);

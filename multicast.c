@@ -29,6 +29,28 @@
 	     pmc = rcu_dereference(pmc->next_rcu))
 #endif
 
+#ifdef CONFIG_BATMAN_ADV_BR_MC_SNOOP
+void br_mc_cpy(char *dst, struct br_ip *src)
+{
+	if (src->proto == htons(ETH_P_IP)) {
+		/* RFC 1112 */
+		memcpy(dst, "\x01\x00\x5e", 3);
+		memcpy(dst + 3, ((char *)&src->u.ip4) + 1, ETH_ALEN - 3);
+		dst[3] &= 0x7F;
+	}
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+	else if (src->proto == htons(ETH_P_IPV6)) {
+		/* RFC 2464 */
+		memcpy(dst, "\x33\x33", 2);
+		memcpy(dst + 2, &src->u.ip6.s6_addr32[3],
+		       sizeof(src->u.ip6.s6_addr32[3]));
+	}
+#endif
+	else
+		memset(dst, 0, ETH_ALEN);
+}
+#endif
+
 static int mcast_has_transient_ipv6(uint8_t *addr, struct net_device *dev)
 {
 	struct inet6_dev *idev;
@@ -127,9 +149,13 @@ static int mcast_has_unspecial_addr(uint8_t *addr, struct net_device *dev)
  *			own, local mcast addresses
  */
 void mcast_add_own_MCA(struct batman_packet *batman_packet, int num_mca,
+		       struct list_head *bridge_mc_list,
 		       struct net_device *soft_iface)
 {
 	struct netdev_hw_addr *mc_list_entry;
+#ifdef CONFIG_BATMAN_ADV_BR_MC_SNOOP
+	struct br_ip_list *br_ip_entry, *tmp;
+#endif
 	int num_mca_done = 0;
 	char *mca_entry = (char *)(batman_packet + 1);
 
@@ -159,6 +185,18 @@ void mcast_add_own_MCA(struct batman_packet *batman_packet, int num_mca,
 	}
 	netif_addr_unlock_bh(soft_iface);
 
+#ifdef CONFIG_BATMAN_ADV_BR_MC_SNOOP
+	list_for_each_entry_safe(br_ip_entry, tmp, bridge_mc_list, list) {
+		if (num_mca_done < num_mca) {
+			br_mc_cpy(mca_entry, &br_ip_entry->addr);
+			num_mca_done++;
+		}
+
+		list_del(&br_ip_entry->list);
+		kfree(br_ip_entry);
+	}
+#endif
+
 out:
 	batman_packet->num_mca = num_mca_done;
 }
@@ -185,3 +223,33 @@ int mcast_mca_local_seq_print_text(struct seq_file *seq, void *offset)
 
 	return 0;
 }
+
+#ifdef CONFIG_BATMAN_ADV_BR_MC_SNOOP
+int mcast_mca_bridge_seq_print_text(struct seq_file *seq, void *offset)
+{
+	struct net_device *net_dev = (struct net_device *)seq->private;
+	struct bat_priv *bat_priv = netdev_priv(net_dev);
+	struct list_head bridge_mc_list;
+	struct br_ip_list *br_ip_entry, *tmp;
+	uint8_t buff[ETH_ALEN];
+
+	INIT_LIST_HEAD(&bridge_mc_list);
+	br_mc_snoop_list_adjacent(net_dev, &bridge_mc_list);
+
+	seq_printf(seq, "[B.A.T.M.A.N. adv %s%s, MainIF/MAC: %s/%pM (%s)]\n",
+		   SOURCE_VERSION, REVISION_VERSION_STR,
+		   bat_priv->primary_if->net_dev->name,
+		   bat_priv->primary_if->net_dev->dev_addr, net_dev->name);
+
+	list_for_each_entry_safe(br_ip_entry, tmp, &bridge_mc_list, list) {
+		br_mc_cpy(buff, &br_ip_entry->addr);
+
+		seq_printf(seq, "%pM\n", buff);
+
+		list_del(&br_ip_entry->list);
+		kfree(br_ip_entry);
+	}
+
+	return 0;
+}
+#endif

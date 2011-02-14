@@ -108,6 +108,7 @@
 #include <linux/netdevice.h>	/* netdevice */
 #include <linux/etherdevice.h>  /* ethernet address classifaction */
 #include <linux/if_ether.h>	/* ethernet header */
+#include <linux/if_bridge.h>	/* br_ip(_list) container, bridge snooping */
 #include <linux/poll.h>		/* poll_table */
 #include <linux/kthread.h>	/* kernel threads */
 #include <linux/pkt_sched.h>	/* schedule types */
