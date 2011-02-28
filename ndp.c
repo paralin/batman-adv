@@ -55,10 +55,12 @@ static void ndp_send(struct work_struct *work)
 	struct neigh_entry *neigh_entry;
 	struct neigh_node *neigh_node;
 	struct hlist_node *node;
-	unsigned int max_len;
+	unsigned int max_len, min_len;
 	struct sk_buff *skb;
 
 	max_len = min_t(unsigned int, ETH_DATA_LEN, hard_iface->net_dev->mtu);
+	min_len = min_t(unsigned int,
+			atomic_read(&bat_priv->ndp_min_len), max_len);
 	skb = skb_copy(hard_iface->ndp_skb, GFP_ATOMIC);
 	if (!skb) {
 		printk(KERN_ERR "batman-adv: Can't send "
@@ -97,6 +99,11 @@ static void ndp_send(struct work_struct *work)
 	}
 	rcu_read_unlock();
 
+	if (skb->len < min_len) {
+		memset(neigh_entry, 0, min_len);
+		skb_put(skb, min_len - skb->len);
+	}
+
 	bat_dbg(DBG_BATMAN, bat_priv,
 		"Sending ndp packet on interface %s, seqno %d\n",
 		hard_iface->net_dev->name, ntohl(ndp_packet->seqno));
@@ -123,7 +130,7 @@ int ndp_init(struct hard_iface *hard_iface)
 					sizeof(struct ndp_packet));
 	ndp_packet = (struct ndp_packet *)
 		skb_push(hard_iface->ndp_skb, sizeof(struct ndp_packet));
-	memset(ndp_packet, 0, sizeof(struct ndp_packet));
+	memset(ndp_packet, 0, ETH_DATA_LEN);
 
 	ndp_packet->packet_type = BAT_PACKET_NDP;
 	ndp_packet->version = COMPAT_VERSION;
