@@ -41,4 +41,14 @@ char bit_get_packet(void *priv, unsigned long *seq_bits,
 /* count the hamming weight, how many good packets did we receive? */
 int bit_packet_count(const unsigned long *seq_bits);
 
+/* if seq_num_diff was provided as:
+ *  (uint32_t)base - (uint32_t)cmp,
+ *
+ * then this function returns true if:
+ *  base is slightly older than cmp
+ */
+static inline int bit_slightly_older(int32_t seq_num_diff) {
+	return ((seq_num_diff <= 0) && (seq_num_diff > -TQ_LOCAL_WINDOW_SIZE));
+}
+
 #endif /* _NET_BATMAN_ADV_BITARRAY_H_ */

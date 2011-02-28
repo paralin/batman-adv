@@ -29,8 +29,8 @@ int ndp_init(struct hard_iface *hard_iface);
 void ndp_free(struct hard_iface *hard_iface);
 uint8_t ndp_fetch_tq(struct ndp_packet *packet,
 		 uint8_t *my_if_addr);
-void ndp_purge_neighbors(void);
-int ndp_update_neighbor(uint8_t my_tq, uint32_t seqno,
+void ndp_purge_neighbors(struct bat_priv *bat_priv);
+int ndp_update_neighbor(uint8_t my_tq, uint32_t seqno, uint32_t interval,
 			struct hard_iface *hard_iface, uint8_t *neigh_addr);
 int ndp_seq_print_text(struct seq_file *seq, void *offset);
 

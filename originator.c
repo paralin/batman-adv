@@ -384,7 +384,7 @@ static void purge_orig(struct work_struct *work)
 		container_of(delayed_work, struct bat_priv, orig_work);
 
 	_purge_orig(bat_priv);
-	ndp_purge_neighbors();
+	ndp_purge_neighbors(bat_priv);
 	start_purge_timer(bat_priv);
 }
 

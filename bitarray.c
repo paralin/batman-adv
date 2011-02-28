@@ -120,7 +120,6 @@ static void bit_reset_window(unsigned long *seq_bits)
 		seq_bits[i] = 0;
 }
 
-
 /* receive and process one packet within the sequence number window.
  *
  * returns:
@@ -135,7 +134,7 @@ char bit_get_packet(void *priv, unsigned long *seq_bits,
 	/* sequence number is slightly older. We already got a sequence number
 	 * higher than this one, so we just mark it. */
 
-	if ((seq_num_diff <= 0) && (seq_num_diff > -TQ_LOCAL_WINDOW_SIZE)) {
+	if (bit_slightly_older(seq_num_diff)) {
 		if (set_mark)
 			bit_mark(seq_bits, -seq_num_diff);
 		return 0;

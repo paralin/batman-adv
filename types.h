@@ -137,7 +137,9 @@ struct neigh_node {
 	uint8_t addr[ETH_ALEN];
 	uint8_t real_packet_count;
 	uint8_t rq;
+	uint32_t ndp_interval;
 	uint32_t last_rq_seqno;
+	uint32_t window_rq_seqno;
 	unsigned long ndp_rq_window[NUM_WORDS];
 	uint8_t tq_recv[TQ_GLOBAL_WINDOW_SIZE];
 	uint8_t tq_index;
@@ -145,6 +147,7 @@ struct neigh_node {
 	uint8_t last_ttl;
 	struct list_head bonding_list;
 	unsigned long last_valid;
+	unsigned long last_update;
 	unsigned long real_bits[NUM_WORDS];
 	atomic_t refcount;
 	struct rcu_head rcu;

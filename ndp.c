@@ -71,6 +71,7 @@ static void ndp_send(struct work_struct *work)
 
 	ndp_packet = (struct ndp_packet *)skb->data;
 	ndp_packet->seqno = htonl(atomic_read(&hard_iface->ndp_seqno));
+	ndp_packet->interval = htonl(atomic_read(&hard_iface->ndp_interval));
 	ndp_packet->num_neighbors = 0;
 	memcpy(ndp_packet->orig, bat_priv->primary_if->net_dev->dev_addr,
 	       ETH_ALEN);
@@ -181,6 +182,7 @@ uint8_t ndp_fetch_tq(struct ndp_packet *packet,
 }
 
 static void ndp_update_neighbor_lq(uint8_t tq, uint32_t seqno,
+				   uint32_t interval,
 				   struct neigh_node *neigh_node,
 				   struct bat_priv *bat_priv)
 {
@@ -188,10 +190,10 @@ static void ndp_update_neighbor_lq(uint8_t tq, uint32_t seqno,
 	int32_t seq_diff;
 	int need_update = 0;
 
-	seq_diff = seqno - neigh_node->last_rq_seqno;
+	seq_diff = seqno - neigh_node->window_rq_seqno;
 
 	is_duplicate |= get_bit_status(neigh_node->ndp_rq_window,
-				       neigh_node->last_rq_seqno,
+				       neigh_node->window_rq_seqno,
 				       seqno);
 
 	/* if the window moved, set the update flag. */
@@ -202,7 +204,11 @@ static void ndp_update_neighbor_lq(uint8_t tq, uint32_t seqno,
 		(bit_packet_count(neigh_node->ndp_rq_window) * TQ_MAX_VALUE)
 			/ TQ_LOCAL_WINDOW_SIZE;
 
-	if (need_update) {
+	if (need_update)
+		neigh_node->window_rq_seqno = seqno;
+
+	if (need_update ||
+	    bit_slightly_older(neigh_node->last_rq_seqno - seqno)) {
 		bat_dbg(DBG_BATMAN, bat_priv, "batman-adv: ndp: "
 			"updating last_seqno of neighbor %pM: old %d, new %d\n",
 			neigh_node->addr, neigh_node->last_rq_seqno, seqno);
@@ -210,7 +216,9 @@ static void ndp_update_neighbor_lq(uint8_t tq, uint32_t seqno,
 		   need to change the variable name later */
 		neigh_node->tq_avg = tq;
 		neigh_node->last_valid = jiffies;
+		neigh_node->last_update = neigh_node->last_valid;
 		neigh_node->last_rq_seqno = seqno;
+		neigh_node->ndp_interval = interval;
 	}
 
 	if (is_duplicate)
@@ -244,11 +252,37 @@ static struct neigh_node *ndp_create_neighbor(uint8_t my_tq, uint32_t seqno,
 
 	memcpy(neigh_node->addr, neigh_addr, ETH_ALEN);
 	neigh_node->last_rq_seqno = seqno - 1;
+	neigh_node->window_rq_seqno = neigh_node->last_rq_seqno;
 
 	return neigh_node;
 }
 
-void ndp_purge_neighbors(void)
+/*
+ * Shifts the local rq window according to how many ndp packets we expect to
+ * have missed. This helps us to avoid publishing outdated local RQ values
+ * (= neighbors' local TQ value towards us).
+ */
+static inline void ndp_update_window(struct neigh_node *neigh_node,
+				     struct bat_priv *bat_priv)
+{
+	int32_t exp_seqno_diff =
+			jiffies_to_msecs(jiffies - neigh_node->last_update) /
+			neigh_node->ndp_interval;
+
+	if (!exp_seqno_diff)
+		return;
+
+	bit_get_packet(bat_priv, neigh_node->ndp_rq_window,
+		       exp_seqno_diff, 0);
+	neigh_node->last_update = jiffies;
+	neigh_node->window_rq_seqno =
+		neigh_node->window_rq_seqno + exp_seqno_diff;
+	neigh_node->rq =
+		(bit_packet_count(neigh_node->ndp_rq_window) * TQ_MAX_VALUE)
+			/ TQ_LOCAL_WINDOW_SIZE;
+}
+
+void ndp_purge_neighbors(struct bat_priv *bat_priv)
 {
 	struct neigh_node *neigh_node;
 	struct hlist_node *node, *node_tmp;
@@ -265,6 +299,7 @@ void ndp_purge_neighbors(void)
 					  &hard_iface->neigh_list, list) {
 			spin_lock(&neigh_node->update_lock);
 			last_valid = neigh_node->last_valid;
+			ndp_update_window(neigh_node, bat_priv);
 			spin_unlock(&neigh_node->update_lock);
 
 			if (time_before(jiffies, last_valid +
@@ -280,7 +315,7 @@ void ndp_purge_neighbors(void)
 	rcu_read_unlock();
 }
 
-int ndp_update_neighbor(uint8_t my_tq, uint32_t seqno,
+int ndp_update_neighbor(uint8_t my_tq, uint32_t seqno, uint32_t interval,
 			struct hard_iface *hard_iface, uint8_t *neigh_addr)
 {
 	struct bat_priv *bat_priv = netdev_priv(hard_iface->soft_iface);
@@ -309,7 +344,8 @@ int ndp_update_neighbor(uint8_t my_tq, uint32_t seqno,
 		if (!neigh_node)
 			goto ret;
 
-		ndp_update_neighbor_lq(my_tq, seqno, neigh_node, bat_priv);
+		ndp_update_neighbor_lq(my_tq, seqno, interval, neigh_node,
+				       bat_priv);
 
 		spin_lock_bh(&hard_iface->neigh_list_lock);
 		hlist_add_head_rcu(&neigh_node->list, &hard_iface->neigh_list);
@@ -318,7 +354,8 @@ int ndp_update_neighbor(uint8_t my_tq, uint32_t seqno,
 	/* old neighbor? */
 	else {
 		spin_lock_bh(&neigh_node->update_lock);
-		ndp_update_neighbor_lq(my_tq, seqno, neigh_node, bat_priv);
+		ndp_update_neighbor_lq(my_tq, seqno, interval, neigh_node,
+				       bat_priv);
 		spin_unlock_bh(&neigh_node->update_lock);
 
 		neigh_node_free_ref(neigh_node);

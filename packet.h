@@ -66,6 +66,7 @@ struct ndp_packet {
 	uint8_t  version;  /* batman version field */
 	uint8_t  orig[6];
 	uint32_t seqno;
+	uint32_t interval;
 	uint8_t  num_neighbors;
 	uint8_t  align[3];
 } __packed;

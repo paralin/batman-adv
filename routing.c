@@ -895,7 +895,8 @@ int recv_ndp_packet(struct sk_buff *skb, struct hard_iface *hard_iface)
 	my_tq = ndp_fetch_tq(packet, hard_iface->net_dev->dev_addr);
 
 	ret = ndp_update_neighbor(my_tq, ntohl(packet->seqno),
-					hard_iface, ethhdr->h_source);
+				  ntohl(packet->interval),
+				  hard_iface, ethhdr->h_source);
 	if (ret) {
 		ret = NET_RX_DROP;
 		goto out;
