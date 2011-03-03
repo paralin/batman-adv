@@ -19,3 +19,9 @@ Contact:        Linus Lüssing <linus.luessing@web.de>
 Description:
                 Defines the interval in milliseconds in which batman
                 sends its probing packets for link quality measurements.
+
+What:           /sys/class/net/<mesh_iface>/batman-adv/ndp_min_len
+Date:           Mar 2011
+Contact:        Linus Lüssing <linus.luessing@web.de>
+Description:
+                Defines the minimum NDP packet size.
