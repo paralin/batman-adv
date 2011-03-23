@@ -1625,8 +1625,15 @@ int recv_mcast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 
 	if (!ret)
 		interface_rx(recv_if->soft_iface, skb, recv_if, hdr_size);
-	else
-		return NET_RX_DROP;
+#ifdef CONFIG_BATMAN_ADV_BR_MC_SNOOP
+	else if (br_mc_snoop_check_adjacent(recv_if->soft_iface,
+					    ethhdr->h_dest))
+		interface_rx(recv_if->soft_iface, skb, recv_if, hdr_size);
+#endif
+	else {
+		ret = NET_RX_DROP;
+		goto out;
+	}
 
 	ret = NET_RX_SUCCESS;
 	goto out;
