@@ -490,20 +490,13 @@ static void hardif_remove_interface(struct hard_iface *hard_iface)
 void hardif_remove_interfaces(void)
 {
 	struct hard_iface *hard_iface, *hard_iface_tmp;
-	struct list_head if_queue;
-
-	INIT_LIST_HEAD(&if_queue);
-
-	spin_lock(&hardif_list_lock);
-	list_for_each_entry_safe(hard_iface, hard_iface_tmp,
-				 &hardif_list, list) {
-		list_del_rcu(&hard_iface->list);
-		list_add_tail(&hard_iface->list, &if_queue);
-	}
-	spin_unlock(&hardif_list_lock);
 
 	rtnl_lock();
-	list_for_each_entry_safe(hard_iface, hard_iface_tmp, &if_queue, list) {
+	list_for_each_entry_safe(hard_iface, hard_iface_tmp, &hardif_list, list) {
+		spin_lock(&hardif_list_lock);
+		list_del_rcu(&hard_iface->list);
+		spin_unlock(&hardif_list_lock);
+
 		hardif_remove_interface(hard_iface);
 	}
 	rtnl_unlock();
