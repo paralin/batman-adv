@@ -22,6 +22,7 @@
 #include "main.h"
 #include "hash.h"
 #include "multicast.h"
+#include "multicast_flow.h"
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 37)
 #define for_each_pmc_rcu(in_dev, pmc)				\
@@ -293,4 +294,9 @@ int mcast_mca_global_seq_print_text(struct seq_file *seq, void *offset)
 	}
 
 	return 0;
+}
+
+void mcast_free(struct bat_priv *bat_priv)
+{
+	mcast_flow_table_free(bat_priv);
 }

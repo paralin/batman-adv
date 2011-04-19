@@ -29,6 +29,7 @@
 #include "gateway_client.h"
 #include "hard-interface.h"
 #include "unicast.h"
+#include "multicast.h"
 #include "soft-interface.h"
 
 static void purge_orig(struct work_struct *work);
@@ -385,6 +386,8 @@ static void _purge_orig(struct bat_priv *bat_priv)
 	gw_election(bat_priv);
 
 	softif_neigh_purge(bat_priv);
+
+	mcast_flow_table_purge(bat_priv);
 }
 
 static void purge_orig(struct work_struct *work)

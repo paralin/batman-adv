@@ -31,6 +31,7 @@
 #include "hard-interface.h"
 #include "gateway_client.h"
 #include "vis.h"
+#include "multicast.h"
 #include "hash.h"
 
 struct list_head hardif_list;
@@ -81,6 +82,7 @@ int mesh_init(struct net_device *soft_iface)
 
 	spin_lock_init(&bat_priv->forw_bat_list_lock);
 	spin_lock_init(&bat_priv->forw_bcast_list_lock);
+	spin_lock_init(&bat_priv->mcast_flow_table_lock);
 	spin_lock_init(&bat_priv->hna_lhash_lock);
 	spin_lock_init(&bat_priv->hna_ghash_lock);
 	spin_lock_init(&bat_priv->gw_list_lock);
@@ -90,6 +92,7 @@ int mesh_init(struct net_device *soft_iface)
 
 	INIT_HLIST_HEAD(&bat_priv->forw_bat_list);
 	INIT_HLIST_HEAD(&bat_priv->forw_bcast_list);
+	INIT_HLIST_HEAD(&bat_priv->mcast_flow_table);
 	INIT_HLIST_HEAD(&bat_priv->gw_list);
 	INIT_HLIST_HEAD(&bat_priv->softif_neigh_list);
 
@@ -137,6 +140,7 @@ void mesh_free(struct net_device *soft_iface)
 	hna_global_free(bat_priv);
 
 	softif_neigh_purge(bat_priv);
+	mcast_free(bat_priv);
 
 	atomic_set(&bat_priv->mesh_state, MESH_INACTIVE);
 }

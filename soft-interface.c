@@ -35,6 +35,7 @@
 #include <linux/etherdevice.h>
 #include <linux/if_vlan.h>
 #include "unicast.h"
+#include "multicast.h"
 
 
 static int bat_get_settings(struct net_device *dev, struct ethtool_cmd *cmd);
@@ -360,8 +361,11 @@ int interface_tx(struct sk_buff *skb, struct net_device *soft_iface)
 		if (ret < 0)
 			goto dropped;
 
-		if (ret == 0)
+
+		if (ret == 0) {
+			mcast_may_optimize(skb, soft_iface);
 			do_bcast = true;
+		}
 	}
 
 	/* ethernet packet should be broadcasted */
@@ -575,6 +579,9 @@ struct net_device *softif_create(char *name)
 	atomic_set(&bat_priv->hop_penalty, 10);
 	atomic_set(&bat_priv->num_bcasts, 3);
 	atomic_set(&bat_priv->mcast_group_awareness, 0);
+	atomic_set(&bat_priv->mcast_threshold_count, 5);
+	atomic_set(&bat_priv->mcast_threshold_interval, 5000);
+	atomic_set(&bat_priv->mcast_grace_period, 25);
 	atomic_set(&bat_priv->log_level, 0);
 	atomic_set(&bat_priv->fragmentation, 1);
 	atomic_set(&bat_priv->bcast_queue_left, BCAST_QUEUE_LEN);

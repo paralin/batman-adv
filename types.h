@@ -146,6 +146,9 @@ struct bat_priv {
 	atomic_t hop_penalty;		/* uint */
 	atomic_t num_bcasts;		/* uint */
 	atomic_t mcast_group_awareness;	/* boolean */
+	atomic_t mcast_threshold_count;	/* uint */
+	atomic_t mcast_threshold_interval; /* uint */
+	atomic_t mcast_grace_period;	/* uint */
 	atomic_t log_level;		/* uint */
 	atomic_t bcast_seqno;
 	atomic_t bcast_queue_left;
@@ -161,6 +164,7 @@ struct bat_priv {
 	struct hlist_head forw_bcast_list;
 	struct hlist_head gw_list;
 	struct list_head vis_send_list;
+	struct hlist_head mcast_flow_table;
 	struct hashtable_t *orig_hash;
 	struct hashtable_t *hna_local_hash;
 	struct hashtable_t *hna_global_hash;
@@ -173,6 +177,7 @@ struct bat_priv {
 	spinlock_t vis_hash_lock; /* protects vis_hash */
 	spinlock_t vis_list_lock; /* protects vis_info::recv_list */
 	spinlock_t softif_neigh_lock; /* protects soft-interface neigh list */
+	spinlock_t mcast_flow_table_lock; /* protects mcast_flow_table */
 	int16_t num_local_hna;
 	atomic_t hna_local_changed;
 	struct delayed_work hna_work;

@@ -369,6 +369,9 @@ BAT_ATTR_UINT(gw_sel_class, S_IRUGO | S_IWUSR, 1, TQ_MAX_VALUE,
 static BAT_ATTR(gw_bandwidth, S_IRUGO | S_IWUSR, show_gw_bwidth,
 		store_gw_bwidth);
 BAT_ATTR_BOOL(mcast_group_awareness, S_IRUGO | S_IWUSR, NULL);
+BAT_ATTR_UINT(mcast_threshold_count, S_IRUGO | S_IWUSR, 1, INT_MAX, NULL);
+BAT_ATTR_UINT(mcast_threshold_interval, S_IRUGO | S_IWUSR, 100, INT_MAX, NULL);
+BAT_ATTR_UINT(mcast_grace_period, S_IRUGO | S_IWUSR, 0, INT_MAX, NULL);
 #ifdef CONFIG_BATMAN_ADV_DEBUG
 BAT_ATTR_UINT(log_level, S_IRUGO | S_IWUSR, 0, 3, NULL);
 #endif
@@ -385,6 +388,9 @@ static struct bat_attribute *mesh_attrs[] = {
 	&bat_attr_gw_sel_class,
 	&bat_attr_gw_bandwidth,
 	&bat_attr_mcast_group_awareness,
+	&bat_attr_mcast_threshold_count,
+	&bat_attr_mcast_threshold_interval,
+	&bat_attr_mcast_grace_period,
 #ifdef CONFIG_BATMAN_ADV_DEBUG
 	&bat_attr_log_level,
 #endif

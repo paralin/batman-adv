@@ -31,5 +31,11 @@ int mcast_mca_bridge_seq_print_text(struct seq_file *seq, void *offset);
 void br_mc_cpy(char *dst, struct br_ip *src);
 #endif
 int mcast_mca_global_seq_print_text(struct seq_file *seq, void *offset);
+void mcast_free(struct bat_priv *bat_priv);
+
+/* from multicast_flow.c */
+int mcast_may_optimize(struct sk_buff *skb, struct net_device *soft_iface);
+void mcast_flow_table_purge(struct bat_priv *bat_priv);
+int mcast_flow_table_seq_print_text(struct seq_file *seq, void *offset);
 
 #endif /* _NET_BATMAN_ADV_MULTICAST_H_ */
