@@ -106,3 +106,26 @@ Contact:        Linus Lüssing <linus.luessing@web.de>
 Description:
 		Indicates whether the multicast group aware optimizations
 		for multicast IP payload data is enabled.
+
+What:           /sys/class/net/<mesh_iface>/mesh/mcast_threshold_count
+Date:           Sep 2012
+Contact:        Linus Lüssing <linus.luessing@web.de>
+Description:
+		Defines the number of transmitted packets of a specific
+		multicast group needed to trigger the setup of a multicast
+		group aware infrastructure.
+
+What:           /sys/class/net/<mesh_iface>/mesh/mcast_threshold_interval
+Date:           Sep 2012
+Contact:        Linus Lüssing <linus.luessing@web.de>
+Description:
+		Defines the interval in milliseconds during which the
+		multicast threshold count needs to be reached to trigger
+		the setup of a multicast group aware infrastructure.
+
+What:           /sys/class/net/<mesh_iface>/mesh/mcast_grace_period
+Date:           Sep 2012
+Contact:        Linus Lüssing <linus.luessing@web.de>
+Description:
+		Defines the amount of time in milliseconds to wait before
+		using a newly created multicast group aware infrastructure.

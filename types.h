@@ -268,6 +268,11 @@ struct batadv_priv_dat {
 };
 #endif
 
+struct batadv_priv_mcast {
+	struct hlist_head flow_table;
+	spinlock_t flow_table_lock; /* protects mcast_flow_table */
+};
+
 struct batadv_priv {
 	atomic_t mesh_state;
 	struct net_device_stats stats;
@@ -288,6 +293,9 @@ struct batadv_priv {
 	atomic_t hop_penalty;		/* uint */
 	atomic_t num_bcasts;		/* uint */
 	atomic_t mcast_group_awareness;	/* boolean */
+	atomic_t mcast_threshold_count;	/* uint */
+	atomic_t mcast_threshold_interval; /* uint */
+	atomic_t mcast_grace_period;	/* uint */
 	atomic_t log_level;		/* uint */
 	atomic_t bcast_seqno;
 	atomic_t bcast_queue_left;
@@ -309,6 +317,7 @@ struct batadv_priv {
 #endif
 	struct batadv_priv_gw gw;
 	struct batadv_priv_tt tt;
+	struct batadv_priv_mcast mcast;
 	struct batadv_priv_vis vis;
 #ifdef CONFIG_BATMAN_ADV_DAT
 	struct batadv_priv_dat dat;

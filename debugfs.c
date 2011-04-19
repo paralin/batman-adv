@@ -324,6 +324,13 @@ static int batadv_mcast_mla_global_open(struct inode *inode, struct file *file)
 			   net_dev);
 }
 
+static int batadv_mcast_flow_table_open(struct inode *inode, struct file *file)
+{
+	struct net_device *net_dev = (struct net_device *)inode->i_private;
+	return single_open(file, batadv_mcast_flow_table_seq_print_text,
+			   net_dev);
+}
+
 static int batadv_vis_data_open(struct inode *inode, struct file *file)
 {
 	struct net_device *net_dev = (struct net_device *)inode->i_private;
@@ -379,6 +386,8 @@ static BATADV_DEBUGINFO(mcast_mla_bridge, S_IRUGO,
 #endif
 static BATADV_DEBUGINFO(mcast_mla_global, S_IRUGO,
 			batadv_mcast_mla_global_open);
+static BATADV_DEBUGINFO(mcast_flow_table, S_IRUGO,
+			batadv_mcast_flow_table_open);
 static BATADV_DEBUGINFO(vis_data, S_IRUGO, batadv_vis_data_open);
 
 static struct batadv_debuginfo *batadv_mesh_debuginfos[] = {
@@ -398,6 +407,7 @@ static struct batadv_debuginfo *batadv_mesh_debuginfos[] = {
 	&batadv_debuginfo_mcast_mla_bridge,
 #endif
 	&batadv_debuginfo_mcast_mla_global,
+	&batadv_debuginfo_mcast_flow_table,
 	&batadv_debuginfo_vis_data,
 	NULL,
 };

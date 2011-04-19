@@ -33,6 +33,7 @@
 #include "bridge_loop_avoidance.h"
 #include "distributed-arp-table.h"
 #include "vis.h"
+#include "multicast.h"
 #include "hash.h"
 #include "bat_algo.h"
 
@@ -97,6 +98,7 @@ int batadv_mesh_init(struct net_device *soft_iface)
 
 	spin_lock_init(&bat_priv->forw_bat_list_lock);
 	spin_lock_init(&bat_priv->forw_bcast_list_lock);
+	spin_lock_init(&bat_priv->mcast.flow_table_lock);
 	spin_lock_init(&bat_priv->tt.changes_list_lock);
 	spin_lock_init(&bat_priv->tt.req_list_lock);
 	spin_lock_init(&bat_priv->tt.roam_list_lock);
@@ -107,6 +109,7 @@ int batadv_mesh_init(struct net_device *soft_iface)
 
 	INIT_HLIST_HEAD(&bat_priv->forw_bat_list);
 	INIT_HLIST_HEAD(&bat_priv->forw_bcast_list);
+	INIT_HLIST_HEAD(&bat_priv->mcast.flow_table);
 	INIT_HLIST_HEAD(&bat_priv->gw.list);
 	INIT_LIST_HEAD(&bat_priv->tt.changes_list);
 	INIT_LIST_HEAD(&bat_priv->tt.req_list);
@@ -163,6 +166,8 @@ void batadv_mesh_free(struct net_device *soft_iface)
 	batadv_bla_free(bat_priv);
 
 	batadv_dat_free(bat_priv);
+
+	batadv_mcast_free(bat_priv);
 
 	free_percpu(bat_priv->bat_counters);
 

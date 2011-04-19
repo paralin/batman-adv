@@ -24,6 +24,7 @@
 #include <linux/in.h>
 #include <linux/version.h>
 #include "main.h"
+#include "multicast_flow.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 38)
 
@@ -94,5 +95,19 @@ void batadv_free_rcu_dat_entry(struct rcu_head *rcu)
 	kfree(dat_entry);
 }
 #endif
+
+/**
+ * batadv_free_rcu_flow_entry - Frees a multicast flow entry
+ * @rcu:	The RCU context holding our flow entry
+ *
+ * This method should be scheduled via something like call_rcu().
+ */
+void batadv_free_rcu_flow_entry(struct rcu_head *rcu)
+{
+	struct batadv_mcast_flow_entry *flow_entry;
+
+	flow_entry = container_of(rcu, struct batadv_mcast_flow_entry, rcu);
+	kfree(flow_entry);
+}
 
 #endif /* < KERNEL_VERSION(3, 0, 0) */

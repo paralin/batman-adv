@@ -36,6 +36,7 @@
 #include <linux/if_vlan.h>
 #include <linux/if_ether.h>
 #include "unicast.h"
+#include "multicast.h"
 #include "bridge_loop_avoidance.h"
 
 
@@ -223,6 +224,8 @@ static int batadv_interface_tx(struct sk_buff *skb,
 
 	/* ethernet packet should be broadcasted */
 	if (do_bcast) {
+		batadv_mcast_flow_may_optimize(skb, bat_priv);
+
 		primary_if = batadv_primary_if_get_selected(bat_priv);
 		if (!primary_if)
 			goto dropped;
@@ -493,6 +496,9 @@ struct net_device *batadv_softif_create(const char *name)
 	atomic_set(&bat_priv->hop_penalty, 30);
 	atomic_set(&bat_priv->num_bcasts, 3);
 	atomic_set(&bat_priv->mcast_group_awareness, 0);
+	atomic_set(&bat_priv->mcast_threshold_count, 5);
+	atomic_set(&bat_priv->mcast_threshold_interval, 5000);
+	atomic_set(&bat_priv->mcast_grace_period, 25);
 	atomic_set(&bat_priv->log_level, 0);
 	atomic_set(&bat_priv->fragmentation, 1);
 	atomic_set(&bat_priv->bcast_queue_left, BATADV_BCAST_QUEUE_LEN);

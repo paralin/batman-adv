@@ -26,6 +26,7 @@
 #include "gateway_client.h"
 #include "hard-interface.h"
 #include "unicast.h"
+#include "multicast.h"
 #include "soft-interface.h"
 #include "bridge_loop_avoidance.h"
 
@@ -386,6 +387,8 @@ static void _batadv_purge_orig(struct batadv_priv *bat_priv)
 
 	batadv_gw_node_purge(bat_priv);
 	batadv_gw_election(bat_priv);
+
+	batadv_mcast_flow_table_purge(bat_priv);
 }
 
 static void batadv_purge_orig(struct work_struct *work)
