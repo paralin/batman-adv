@@ -151,8 +151,10 @@ struct bat_priv {
 	atomic_t mcast_grace_period;	/* uint */
 	atomic_t mcast_tracker_interval;/* uint, auto */
 	atomic_t mcast_tracker_timeout; /* uint, auto */
+	atomic_t mcast_fanout;		/* uint */
 	atomic_t log_level;		/* uint */
 	atomic_t bcast_seqno;
+	atomic_t mcast_seqno;
 	atomic_t bcast_queue_left;
 	atomic_t batman_queue_left;
 	char num_ifaces;

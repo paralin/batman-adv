@@ -430,6 +430,7 @@ static BAT_ATTR(mcast_tracker_interval, S_IRUGO | S_IWUSR,
 		show_mcast_tracker_interval, store_mcast_tracker_interval);
 static BAT_ATTR(mcast_tracker_timeout, S_IRUGO | S_IWUSR,
 		show_mcast_tracker_timeout, store_mcast_tracker_timeout);
+BAT_ATTR_UINT(mcast_fanout, S_IRUGO | S_IWUSR, 0, INT_MAX, NULL);
 #ifdef CONFIG_BATMAN_ADV_DEBUG
 BAT_ATTR_UINT(log_level, S_IRUGO | S_IWUSR, 0, 3, NULL);
 #endif
@@ -451,6 +452,7 @@ static struct bat_attribute *mesh_attrs[] = {
 	&bat_attr_mcast_grace_period,
 	&bat_attr_mcast_tracker_interval,
 	&bat_attr_mcast_tracker_timeout,
+	&bat_attr_mcast_fanout,
 #ifdef CONFIG_BATMAN_ADV_DEBUG
 	&bat_attr_log_level,
 #endif

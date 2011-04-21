@@ -324,7 +324,7 @@ int interface_tx(struct sk_buff *skb, struct net_device *soft_iface)
 	struct vlan_ethhdr *vhdr;
 	int data_len = skb->len, ret;
 	short vid = -1;
-	bool do_bcast = false;
+	bool bcast_dst = false, mcast_dst = false;
 
 	if (atomic_read(&bat_priv->mesh_state) != MESH_ACTIVE)
 		goto dropped;
@@ -361,15 +361,26 @@ int interface_tx(struct sk_buff *skb, struct net_device *soft_iface)
 		if (ret < 0)
 			goto dropped;
 
+		/* dhcp request, which should be sent to the gateway
+		 * directly? */
+		if (ret)
+			goto unicast;
 
-		if (ret == 0) {
-			mcast_may_optimize(skb, soft_iface);
-			do_bcast = true;
+		if (is_broadcast_ether_addr(ethhdr->h_dest))
+			bcast_dst = true;
+		else {
+			ret = mcast_may_optimize(skb, soft_iface);
+			if (ret < 0)
+				goto dropped;
+			else if (ret)
+				mcast_dst = true;
+			else
+				bcast_dst = true;
 		}
 	}
 
 	/* ethernet packet should be broadcasted */
-	if (do_bcast) {
+	if (bcast_dst) {
 		if (!bat_priv->primary_if)
 			goto dropped;
 
@@ -398,8 +409,15 @@ int interface_tx(struct sk_buff *skb, struct net_device *soft_iface)
 		 * the original skb. */
 		kfree_skb(skb);
 
+	/* multicast data with path optimization */
+	} else if (mcast_dst) {
+		ret = mcast_send_skb(skb, bat_priv);
+		if (ret != 0)
+			goto dropped_freed;
+
 	/* unicast packet */
 	} else {
+unicast:
 		ret = unicast_send_skb(skb, bat_priv);
 		if (ret != 0)
 			goto dropped_freed;
@@ -584,6 +602,7 @@ struct net_device *softif_create(char *name)
 	atomic_set(&bat_priv->mcast_grace_period, 25);
 	atomic_set(&bat_priv->mcast_tracker_interval, 0);	/* = auto */
 	atomic_set(&bat_priv->mcast_tracker_timeout, 0);	/* = auto */
+	atomic_set(&bat_priv->mcast_fanout, 15); /* bcast if more than 15 */
 	atomic_set(&bat_priv->log_level, 0);
 	atomic_set(&bat_priv->fragmentation, 1);
 	atomic_set(&bat_priv->bcast_queue_left, BCAST_QUEUE_LEN);
@@ -591,6 +610,7 @@ struct net_device *softif_create(char *name)
 
 	atomic_set(&bat_priv->mesh_state, MESH_INACTIVE);
 	atomic_set(&bat_priv->bcast_seqno, 1);
+	atomic_set(&bat_priv->mcast_seqno, 1);
 	atomic_set(&bat_priv->hna_local_changed, 0);
 
 	bat_priv->primary_if = NULL;

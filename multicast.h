@@ -42,6 +42,7 @@ void br_mc_cpy(char *dst, struct br_ip *src);
 #endif
 int mcast_mca_global_seq_print_text(struct seq_file *seq, void *offset);
 int mcast_forw_table_seq_print_text(struct seq_file *seq, void *offset);
+int mcast_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv);
 int mcast_init(struct bat_priv *bat_priv);
 void mcast_free(struct bat_priv *bat_priv);
 
