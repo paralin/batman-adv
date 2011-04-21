@@ -45,6 +45,7 @@
 #include "main.h"
 #include "hash.h"
 #include "multicast_flow.h"
+#include "multicast_tracker.h"
 
 /* should match batadv_ogm_packet's mcast_num_mla */
 #define BATADV_MLA_MAX UINT8_MAX

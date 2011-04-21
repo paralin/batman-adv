@@ -129,3 +129,10 @@ Contact:        Linus Lüssing <linus.luessing@web.de>
 Description:
 		Defines the amount of time in milliseconds to wait before
 		using a newly created multicast group aware infrastructure.
+
+What:           /sys/class/net/<mesh_iface>/mesh/mcast_tracker_interval
+Date:           Sep 2012
+Contact:        Linus Lüssing <linus.luessing@web.de>
+Description:
+		Defines the interval in milliseconds in which batman sends
+		its multicast tracker packets.

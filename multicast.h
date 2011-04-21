@@ -22,6 +22,7 @@
 #ifndef _NET_BATMAN_ADV_MULTICAST_H_
 #define _NET_BATMAN_ADV_MULTICAST_H_
 
+int batadv_mcast_init(struct batadv_priv *bat_priv);
 void batadv_mcast_free(struct batadv_priv *bat_priv);
 
 /* from multicast_mla.c */
@@ -44,5 +45,12 @@ int batadv_mcast_flow_may_optimize(struct sk_buff *skb,
 			      struct batadv_priv *bat_priv);
 void batadv_mcast_flow_table_purge(struct batadv_priv *bat_priv);
 int batadv_mcast_flow_table_seq_print_text(struct seq_file *seq, void *offset);
+
+/* from multicast_tracker.c */
+void batadv_mcast_tracker_reset(struct net_device *net_dev);
+int batadv_mcast_tracker_interval_set(struct net_device *net_dev, char *buff,
+				      size_t count);
+void batadv_mcast_tracker_packet_route(struct sk_buff *skb,
+				       struct batadv_priv *bat_priv);
 
 #endif /* _NET_BATMAN_ADV_MULTICAST_H_ */

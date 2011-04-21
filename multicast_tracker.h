@@ -19,22 +19,11 @@
  *
  */
 
-#include "main.h"
-#include "multicast_flow.h"
-#include "multicast_tracker.h"
+#ifndef _NET_BATMAN_ADV_MULTICAST_TRACKER_H_
+#define _NET_BATMAN_ADV_MULTICAST_TRACKER_H_
 
-int batadv_mcast_init(struct batadv_priv *bat_priv)
-{
-	INIT_DELAYED_WORK(&bat_priv->mcast.tracker_work,
-			  batadv_mcast_tracker_timer);
+void batadv_mcast_tracker_timer(struct work_struct *work);
+void batadv_mcast_tracker_start(struct batadv_priv *bat_priv);
+void batadv_mcast_tracker_stop(struct batadv_priv *bat_priv);
 
-	batadv_mcast_tracker_start(bat_priv);
-
-	return 0;
-}
-
-void batadv_mcast_free(struct batadv_priv *bat_priv)
-{
-	batadv_mcast_flow_table_free(bat_priv);
-	batadv_mcast_tracker_stop(bat_priv);
-}
+#endif /* _NET_BATMAN_ADV_MULTICAST_H_ */
