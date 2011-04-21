@@ -29,6 +29,7 @@
 
 #include "main.h"
 #include "multicast_flow.h"
+#include "multicast_tracker.h"
 #include "multicast_forw.h"
 #include "hash.h"
 #include "originator.h"
@@ -127,12 +128,6 @@ static void batadv_mcast_dest_entry_inc_s(
 		for (batadv_mcast_dest_entry_init_s(state);		\
 		     batadv_mcast_dest_entry_check_s(state);		\
 		     batadv_mcast_dest_entry_inc_s(state))
-
-struct batadv_dest_entries_list {
-	struct list_head list;
-	uint8_t dest[6];
-	struct batadv_hard_iface *hard_iface;
-};
 
 struct batadv_mcast_entries_list {
 	struct list_head list;

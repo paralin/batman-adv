@@ -156,7 +156,7 @@ static int batadv_interface_tx(struct sk_buff *skb,
 	unsigned int header_len = 0;
 	int data_len = skb->len, ret;
 	short vid __maybe_unused = -1;
-	bool do_bcast = false;
+	bool do_bcast = false, do_mcast = false;
 	uint32_t seqno;
 	unsigned long brd_delay = 1;
 
@@ -222,10 +222,19 @@ static int batadv_interface_tx(struct sk_buff *skb,
 		}
 	}
 
+	if (do_bcast && !is_broadcast_ether_addr(ethhdr->h_dest)) {
+		ret = batadv_mcast_flow_may_optimize(skb, bat_priv);
+		if (ret < 0)
+			goto dropped;
+
+		if (ret > 0) {
+			do_bcast = false;
+			do_mcast = true;
+		}
+	}
+
 	/* ethernet packet should be broadcasted */
 	if (do_bcast) {
-		batadv_mcast_flow_may_optimize(skb, bat_priv);
-
 		primary_if = batadv_primary_if_get_selected(bat_priv);
 		if (!primary_if)
 			goto dropped;
@@ -264,6 +273,12 @@ static int batadv_interface_tx(struct sk_buff *skb,
 		 * the original skb.
 		 */
 		kfree_skb(skb);
+
+	/* multicast data with path optimization */
+	} else if (do_mcast) {
+		ret = batadv_mcast_forw_send_skb(skb, bat_priv);
+		if (ret != 0)
+			goto dropped_freed;
 
 	/* unicast packet */
 	} else {
@@ -501,6 +516,7 @@ struct net_device *batadv_softif_create(const char *name)
 	atomic_set(&bat_priv->mcast_grace_period, 25);
 	atomic_set(&bat_priv->mcast_tracker_interval, 500);
 	atomic_set(&bat_priv->mcast_forw_timeout, 2500);
+	atomic_set(&bat_priv->mcast_fanout, 15); /* bcast if more than 15 */
 	atomic_set(&bat_priv->log_level, 0);
 	atomic_set(&bat_priv->fragmentation, 1);
 	atomic_set(&bat_priv->bcast_queue_left, BATADV_BCAST_QUEUE_LEN);

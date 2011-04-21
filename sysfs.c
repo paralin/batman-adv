@@ -451,6 +451,7 @@ BATADV_ATTR_SIF_UINT(mcast_tracker_interval, S_IRUGO | S_IWUSR,
 		     2 * BATADV_JITTER, INT_MAX, batadv_mcast_tracker_reset);
 BATADV_ATTR_SIF_UINT(mcast_forw_timeout, S_IRUGO | S_IWUSR, 2 * BATADV_JITTER,
 		     INT_MAX, NULL);
+BATADV_ATTR_SIF_UINT(mcast_fanout, S_IRUGO | S_IWUSR, 0, INT_MAX, NULL);
 #ifdef CONFIG_BATMAN_ADV_DEBUG
 BATADV_ATTR_SIF_UINT(log_level, S_IRUGO | S_IWUSR, 0, BATADV_DBG_ALL, NULL);
 #endif
@@ -480,6 +481,7 @@ static struct batadv_attribute *batadv_mesh_attrs[] = {
 	&batadv_attr_mcast_grace_period,
 	&batadv_attr_mcast_tracker_interval,
 	&batadv_attr_mcast_forw_timeout,
+	&batadv_attr_mcast_fanout,
 #ifdef CONFIG_BATMAN_ADV_DEBUG
 	&batadv_attr_log_level,
 #endif

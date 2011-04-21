@@ -33,6 +33,10 @@
  */
 
 #include "main.h"
+#include "multicast_tracker.h"
+#include "soft-interface.h"
+#include "hard-interface.h"
+#include "send.h"
 
 struct batadv_mcast_forw_nexthop_entry {
 	struct hlist_node list;
@@ -560,6 +564,270 @@ static inline struct batadv_hard_iface *batadv_mcast_if_num_to_hard_if(
 			return hard_iface;
 
 	return NULL;
+}
+
+/**
+ * batadv_mcast_nexthops_from_if_list - Generates a list of next hops
+ * @mcast_if_list:	Multicast interface list we want to generate from
+ * @nexthop_list:	The list we will add any found next hops to
+ * @bat_priv:		bat_priv of the mesh network we want to make this for
+ *
+ * This method performs a look up in the given multicast interface list
+ * (a part of the multicast routing table for a specific multicast and
+ * originator address) and will gather returned next hop and interface
+ * information in the given nexthop_list.
+ *
+ * For any interface the generated list will contain some unicast addresses
+ * for each next hop or a single broadcast address for all these next hops,
+ * depending on the configured mcast_fanout.
+ *
+ * Caller needs to acquire an RCU read lock first.
+ */
+static inline void batadv_mcast_nexthops_from_if_list(
+					struct hlist_head *mcast_if_list,
+					struct list_head *nexthop_list,
+					struct batadv_priv *bat_priv)
+{
+	struct batadv_hard_iface *hard_iface;
+	struct batadv_mcast_forw_if_entry *if_entry;
+	struct batadv_mcast_forw_nexthop_entry *nexthop_entry;
+	struct hlist_node *node, *node2;
+	struct batadv_dest_entries_list *dest_entry;
+	int mcast_fanout = atomic_read(&bat_priv->mcast_fanout);
+
+	hlist_for_each_entry_rcu(if_entry, node, mcast_if_list, list) {
+		hard_iface = batadv_mcast_if_num_to_hard_if(if_entry->if_num);
+		if (!hard_iface || !atomic_inc_not_zero(&hard_iface->refcount))
+			continue;
+
+		/* send via broadcast */
+		if (if_entry->num_nexthops > mcast_fanout) {
+			dest_entry = kmalloc(
+				       sizeof(struct batadv_dest_entries_list),
+				       GFP_ATOMIC);
+			memcpy(dest_entry->dest, batadv_broadcast_addr,
+			       ETH_ALEN);
+			dest_entry->hard_iface = hard_iface;
+			list_add(&dest_entry->list, nexthop_list);
+			continue;
+		}
+
+		/* send separate unicast packets */
+		hlist_for_each_entry_rcu(nexthop_entry, node2,
+					 &if_entry->mcast_nexthop_list, list) {
+			if (!batadv_mcast_get_remaining_timeout(nexthop_entry,
+								bat_priv))
+				continue;
+
+			dest_entry = kmalloc(
+				       sizeof(struct batadv_dest_entries_list),
+					      GFP_ATOMIC);
+			memcpy(dest_entry->dest, nexthop_entry->neigh_addr,
+			       ETH_ALEN);
+
+			if (!atomic_inc_not_zero(&hard_iface->refcount)) {
+				kfree(dest_entry);
+				continue;
+			}
+
+			dest_entry->hard_iface = hard_iface;
+			list_add(&dest_entry->list, nexthop_list);
+		}
+		batadv_hardif_free_ref(hard_iface);
+	}
+}
+
+/**
+ * batadv_mcast_nexthops_from_orig_list - Generates a list of next hops
+ * @orig:		Originator address - where it came from
+ * @mcast_orig_list:	Multicast originator list we want to generate from
+ * @nexthop_list:	The list we will add any found next hops to
+ * @bat_priv:		bat_priv of the mesh network we want to make this for
+ *
+ * This method performs a look up for the given originator address within
+ * the given multicast originator list (a part of the multicast routing table
+ * for a specific multicast address) and will gather returned next hop and
+ * interface information in the given nexthop_list.
+ *
+ * For any interface the generated list will contain some unicast addresses
+ * for each next hop or a single broadcast address for all these next hops,
+ * depending on the configured mcast_fanout.
+ *
+ * Caller needs to acquire an RCU read lock first.
+ */
+static inline void batadv_mcast_nexthops_from_orig_list(
+					uint8_t *orig,
+					struct hlist_head *mcast_orig_list,
+					struct list_head *nexthop_list,
+					struct batadv_priv *bat_priv)
+{
+	struct batadv_mcast_forw_orig_entry *orig_entry;
+	struct hlist_node *node;
+
+	hlist_for_each_entry_rcu(orig_entry, node, mcast_orig_list, list) {
+		if (memcmp(orig, orig_entry->orig, ETH_ALEN))
+			continue;
+
+		batadv_mcast_nexthops_from_if_list(&orig_entry->mcast_if_list,
+						   nexthop_list, bat_priv);
+		break;
+	}
+}
+
+/**
+ * batadv_mcast_nexthops_from_table - Generate a list of next hops
+ * @dest:		Multicast destination address - where we want to go to
+ * @orig:		Originator address - where it came from
+ * @mcast_forw_table:	Multicast routing table we will gather next hops from
+ * @nexthop_list:	The list we will add any found next hops to
+ * @bat_priv:		bat_priv of the mesh network we want to make this for
+ *
+ * This method performs a look up for the given multicast destination and
+ * originator address in the provided multicast routing table and will
+ * gather returned next hop and interface information in the given
+ * nexthop_list.
+ *
+ * For any interface the generated list will contain some unicast addresses
+ * for each next hop or a single broadcast address for all these next hops,
+ * depending on the configured mcast_fanout.
+ *
+ * Caller needs to acquire an RCU read lock first.
+ */
+static inline void batadv_mcast_nexthops_from_table(
+					uint8_t *dest,
+					uint8_t *orig,
+					struct hlist_head *mcast_forw_table,
+					struct list_head *nexthop_list,
+					struct batadv_priv *bat_priv)
+{
+	struct batadv_mcast_forw_table_entry *table_entry;
+	struct hlist_node *node;
+
+	hlist_for_each_entry_rcu(table_entry, node, mcast_forw_table, list) {
+		if (memcmp(dest, table_entry->mcast_addr, ETH_ALEN))
+			continue;
+
+		batadv_mcast_nexthops_from_orig_list(
+					orig,
+					&table_entry->mcast_orig_list,
+					nexthop_list, bat_priv);
+		break;
+	}
+}
+
+/**
+ * batadv_mcast_forw_packet_route - Routes a multicast packet
+ * @skb:	A multicast frame encapsulated in a batman multicast header
+ * @bat_priv:	bat_priv of the mesh network we got this frame from
+ *
+ * This method decreases the TTL of the given batman multicast packet
+ * by one, looks up all next hops for this packet in our multicast
+ * routing table and sends this skb to these next hops on their
+ * according interfaces.
+ *
+ * If there are less than or equal to the configured mcast_fanout
+ * next hops for this packet on an interface then the multicast packet will be
+ * transmitted via unicast to each of these next hops individually.
+ * Otherwise just num_bcast identical copies will be transmitted
+ * via broadcast on such an interface instead.
+ *
+ * Caller needs to free the provided skb.
+ */
+static void batadv_mcast_forw_packet_route(struct sk_buff *skb,
+					   struct batadv_priv *bat_priv)
+{
+	struct sk_buff *skb1;
+	struct batadv_mcast_packet *mcast_packet;
+	struct ethhdr *ethhdr;
+	int num_bcasts, i;
+	struct list_head nexthop_list;
+	struct batadv_dest_entries_list *dest_entry, *tmp;
+
+	num_bcasts = atomic_read(&bat_priv->num_bcasts);
+	mcast_packet = (struct batadv_mcast_packet *)skb->data;
+	ethhdr = (struct ethhdr *)(mcast_packet + 1);
+
+	INIT_LIST_HEAD(&nexthop_list);
+
+	mcast_packet->header.ttl--;
+
+	rcu_read_lock();
+	batadv_mcast_nexthops_from_table(ethhdr->h_dest, mcast_packet->orig,
+					 &bat_priv->mcast.forw_table,
+					 &nexthop_list, bat_priv);
+	rcu_read_unlock();
+
+	list_for_each_entry_safe(dest_entry, tmp, &nexthop_list, list) {
+		if (is_broadcast_ether_addr(dest_entry->dest)) {
+			for (i = 0; i < num_bcasts; i++) {
+				skb1 = skb_clone(skb, GFP_ATOMIC);
+				batadv_send_skb_packet(skb1,
+						       dest_entry->hard_iface,
+						       dest_entry->dest);
+			}
+		} else {
+			skb1 = skb_clone(skb, GFP_ATOMIC);
+			batadv_send_skb_packet(skb1, dest_entry->hard_iface,
+					       dest_entry->dest);
+		}
+		batadv_hardif_free_ref(dest_entry->hard_iface);
+		list_del(&dest_entry->list);
+		kfree(dest_entry);
+	}
+}
+
+/**
+ * batadv_mcast_forw_send_skb - Encapsulates and sends a multicast packet
+ * @skb:	The raw multicast frame
+ * @bat_priv:	bat_priv of the mesh network we got this frame from
+ *
+ * This function encapsulates the given skb in a batman-adv multicast
+ * packet header, gives it a unique sequence number (and will
+ * therefore very likely increase bat_priv->mcast_seqno as a
+ * side-effect) and then routes it.
+ *
+ * Returns 1 on error and 0 on suceess.
+ *
+ * Consumes the given skb.
+ */
+int batadv_mcast_forw_send_skb(struct sk_buff *skb,
+			       struct batadv_priv *bat_priv)
+{
+	struct batadv_mcast_packet *mcast_packet;
+	struct batadv_hard_iface *primary_if;
+	int ret = 1;
+
+	primary_if = batadv_primary_if_get_selected(bat_priv);
+	if (!primary_if)
+		goto dropped;
+
+	if (batadv_skb_head_push(skb, sizeof(struct batadv_mcast_packet)) < 0)
+		goto dropped;
+
+	mcast_packet = (struct batadv_mcast_packet *)skb->data;
+	mcast_packet->header.version = BATADV_COMPAT_VERSION;
+	mcast_packet->header.ttl = BATADV_TTL;
+
+	/* batman packet type: multicast */
+	mcast_packet->header.packet_type = BATADV_MCAST;
+
+	/* hw address of first interface is the orig mac because only
+	 * this mac is known throughout the mesh */
+	memcpy(mcast_packet->orig, primary_if->net_dev->dev_addr, ETH_ALEN);
+
+	/* set broadcast sequence number */
+	mcast_packet->seqno =
+		htonl(atomic_inc_return(&bat_priv->mcast_seqno));
+
+	batadv_mcast_forw_packet_route(skb, bat_priv);
+
+	ret = 0;
+
+dropped:
+	kfree_skb(skb);
+	if (primary_if)
+		batadv_hardif_free_ref(primary_if);
+	return ret;
 }
 
 static void batadv_mcast_seq_print_if_entry(

@@ -144,3 +144,13 @@ Description:
 		Defines the timeout in milliseconds after which to purge
 		a multicast route which was not updated via a new tracker
 		packet yet.
+
+What:           /sys/class/net/<mesh_iface>/mesh/mcast_fanout
+Date:           Sep 2012
+Contact:        Linus Lüssing <linus.luessing@web.de>
+Description:
+		Defines when to use (multiple) unicast packets or when
+		to use broadcasting for forwarding a multicast packet on
+		the multicast group aware infrastructure: If the number
+		of next hops are equal or below mcast_fanout then use
+		unicast, otherwise use broadcasting.

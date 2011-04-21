@@ -31,6 +31,7 @@ enum batadv_packettype {
 	BATADV_ROAM_ADV		= 0x08,
 	BATADV_UNICAST_4ADDR	= 0x09,
 	BATADV_MCAST_TRACKER	= 0x0A,
+	BATADV_MCAST		= 0x0B,
 };
 
 /**
@@ -232,6 +233,13 @@ struct batadv_bcast_packet {
 };
 
 #pragma pack()
+
+struct batadv_mcast_packet {
+	struct batadv_header header;
+	uint8_t  reserved;
+	__be32   seqno;
+	uint8_t  orig[ETH_ALEN];
+} __packed;
 
 /* marks the path for multicast streams */
 struct batadv_mcast_tracker_packet {

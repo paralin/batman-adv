@@ -22,6 +22,12 @@
 #ifndef _NET_BATMAN_ADV_MULTICAST_TRACKER_H_
 #define _NET_BATMAN_ADV_MULTICAST_TRACKER_H_
 
+struct batadv_dest_entries_list {
+	struct list_head list;
+	uint8_t dest[6];
+	struct batadv_hard_iface *hard_iface;
+};
+
 void batadv_mcast_tracker_timer(struct work_struct *work);
 void batadv_mcast_tracker_start(struct batadv_priv *bat_priv);
 void batadv_mcast_tracker_stop(struct batadv_priv *bat_priv);
