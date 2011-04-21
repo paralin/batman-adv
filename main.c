@@ -110,6 +110,9 @@ int mesh_init(struct net_device *soft_iface)
 	if (vis_init(bat_priv) < 1)
 		goto err;
 
+	if (mcast_init(bat_priv) < 1)
+		goto err;
+
 	atomic_set(&bat_priv->mesh_state, MESH_ACTIVE);
 	goto end;
 

@@ -582,6 +582,8 @@ struct net_device *softif_create(char *name)
 	atomic_set(&bat_priv->mcast_threshold_count, 5);
 	atomic_set(&bat_priv->mcast_threshold_interval, 5000);
 	atomic_set(&bat_priv->mcast_grace_period, 25);
+	atomic_set(&bat_priv->mcast_tracker_interval, 0);	/* = auto */
+	atomic_set(&bat_priv->mcast_tracker_timeout, 0);	/* = auto */
 	atomic_set(&bat_priv->log_level, 0);
 	atomic_set(&bat_priv->fragmentation, 1);
 	atomic_set(&bat_priv->bcast_queue_left, BCAST_QUEUE_LEN);

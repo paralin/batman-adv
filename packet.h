@@ -24,12 +24,13 @@
 
 #define ETH_P_BATMAN  0x4305	/* unofficial/not registered Ethertype */
 
-#define BAT_PACKET       0x01
-#define BAT_ICMP         0x02
-#define BAT_UNICAST      0x03
-#define BAT_BCAST        0x04
-#define BAT_VIS          0x05
-#define BAT_UNICAST_FRAG 0x06
+#define BAT_PACKET        0x01
+#define BAT_ICMP          0x02
+#define BAT_UNICAST       0x03
+#define BAT_BCAST         0x04
+#define BAT_VIS           0x05
+#define BAT_UNICAST_FRAG  0x06
+#define BAT_MCAST_TRACKER 0x07
 
 /* this file is included by batctl which needs these defines */
 #define COMPAT_VERSION 14
@@ -119,6 +120,22 @@ struct bcast_packet {
 	uint8_t  orig[6];
 	uint8_t  ttl;
 	uint32_t seqno;
+} __packed;
+
+/* marks the path for multicast streams */
+struct mcast_tracker_packet {
+	uint8_t  packet_type;    /* BAT_MCAST_TRACKER */
+	uint8_t  version;        /* batman version field */
+	uint8_t  orig[6];
+	uint8_t  ttl;
+	uint8_t  num_mcast_entries;
+	uint8_t  align[2];
+} __packed;
+
+struct mcast_entry {
+	uint8_t  mcast_addr[6];
+	uint8_t  num_dest;       /* number of multicast data receivers */
+	uint8_t  align;
 } __packed;
 
 struct vis_packet {

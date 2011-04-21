@@ -27,6 +27,7 @@
 #include "gateway_common.h"
 #include "gateway_client.h"
 #include "vis.h"
+#include "multicast.h"
 
 #define to_dev(obj)		container_of(obj, struct device, kobj)
 #define kobj_to_netdev(obj)	to_net_dev(to_dev(obj->parent))
@@ -356,12 +357,65 @@ static ssize_t store_gw_bwidth(struct kobject *kobj, struct attribute *attr,
 	return gw_bandwidth_set(net_dev, buff, count);
 }
 
+static void update_mcast_tracker(struct net_device *net_dev)
+{
+	struct bat_priv *bat_priv = netdev_priv(net_dev);
+
+	if (!atomic_read(&bat_priv->mcast_tracker_interval))
+		mcast_tracker_reset(bat_priv);
+}
+
+static ssize_t show_mcast_tracker_interval(struct kobject *kobj,
+			struct attribute *attr, char *buff)
+{
+	struct device *dev = to_dev(kobj->parent);
+	struct bat_priv *bat_priv = netdev_priv(to_net_dev(dev));
+	int tracker_interval = atomic_read(&bat_priv->mcast_tracker_interval);
+
+	if (!tracker_interval)
+		return sprintf(buff, "auto\n");
+	else
+		return sprintf(buff, "%i\n", tracker_interval);
+}
+
+static ssize_t store_mcast_tracker_interval(struct kobject *kobj,
+			struct attribute *attr, char *buff, size_t count)
+{
+	struct device *dev = to_dev(kobj->parent);
+	struct net_device *net_dev = to_net_dev(dev);
+
+	return mcast_tracker_interval_set(net_dev, buff, count);
+}
+
+static ssize_t show_mcast_tracker_timeout(struct kobject *kobj,
+			struct attribute *attr, char *buff)
+{
+	struct device *dev = to_dev(kobj->parent);
+	struct bat_priv *bat_priv = netdev_priv(to_net_dev(dev));
+	int tracker_timeout = atomic_read(&bat_priv->mcast_tracker_timeout);
+
+	if (!tracker_timeout)
+		return sprintf(buff, "auto\n");
+	else
+		return sprintf(buff, "%i\n", tracker_timeout);
+}
+
+static ssize_t store_mcast_tracker_timeout(struct kobject *kobj,
+			struct attribute *attr, char *buff, size_t count)
+{
+	struct device *dev = to_dev(kobj->parent);
+	struct net_device *net_dev = to_net_dev(dev);
+
+	return mcast_tracker_timeout_set(net_dev, buff, count);
+}
+
 BAT_ATTR_BOOL(aggregated_ogms, S_IRUGO | S_IWUSR, NULL);
 BAT_ATTR_BOOL(bonding, S_IRUGO | S_IWUSR, NULL);
 BAT_ATTR_BOOL(fragmentation, S_IRUGO | S_IWUSR, update_min_mtu);
 static BAT_ATTR(vis_mode, S_IRUGO | S_IWUSR, show_vis_mode, store_vis_mode);
 static BAT_ATTR(gw_mode, S_IRUGO | S_IWUSR, show_gw_mode, store_gw_mode);
-BAT_ATTR_UINT(orig_interval, S_IRUGO | S_IWUSR, 2 * JITTER, INT_MAX, NULL);
+BAT_ATTR_UINT(orig_interval, S_IRUGO | S_IWUSR, 2 * JITTER, INT_MAX,
+	      update_mcast_tracker);
 BAT_ATTR_UINT(hop_penalty, S_IRUGO | S_IWUSR, 0, TQ_MAX_VALUE, NULL);
 BAT_ATTR_UINT(num_bcasts, S_IRUGO | S_IWUSR, 1, INT_MAX, NULL);
 BAT_ATTR_UINT(gw_sel_class, S_IRUGO | S_IWUSR, 1, TQ_MAX_VALUE,
@@ -372,6 +426,10 @@ BAT_ATTR_BOOL(mcast_group_awareness, S_IRUGO | S_IWUSR, NULL);
 BAT_ATTR_UINT(mcast_threshold_count, S_IRUGO | S_IWUSR, 1, INT_MAX, NULL);
 BAT_ATTR_UINT(mcast_threshold_interval, S_IRUGO | S_IWUSR, 100, INT_MAX, NULL);
 BAT_ATTR_UINT(mcast_grace_period, S_IRUGO | S_IWUSR, 0, INT_MAX, NULL);
+static BAT_ATTR(mcast_tracker_interval, S_IRUGO | S_IWUSR,
+		show_mcast_tracker_interval, store_mcast_tracker_interval);
+static BAT_ATTR(mcast_tracker_timeout, S_IRUGO | S_IWUSR,
+		show_mcast_tracker_timeout, store_mcast_tracker_timeout);
 #ifdef CONFIG_BATMAN_ADV_DEBUG
 BAT_ATTR_UINT(log_level, S_IRUGO | S_IWUSR, 0, 3, NULL);
 #endif
@@ -391,6 +449,8 @@ static struct bat_attribute *mesh_attrs[] = {
 	&bat_attr_mcast_threshold_count,
 	&bat_attr_mcast_threshold_interval,
 	&bat_attr_mcast_grace_period,
+	&bat_attr_mcast_tracker_interval,
+	&bat_attr_mcast_tracker_timeout,
 #ifdef CONFIG_BATMAN_ADV_DEBUG
 	&bat_attr_log_level,
 #endif

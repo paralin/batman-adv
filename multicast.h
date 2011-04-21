@@ -22,6 +22,13 @@
 #ifndef _NET_BATMAN_ADV_MULTICAST_H_
 #define _NET_BATMAN_ADV_MULTICAST_H_
 
+void mcast_tracker_reset(struct bat_priv *bat_priv);
+int mcast_tracker_interval_set(struct net_device *net_dev, char *buff,
+			       size_t count);
+int mcast_tracker_timeout_set(struct net_device *net_dev, char *buff,
+			       size_t count);
+void route_mcast_tracker_packet(struct sk_buff *tracker_packet,
+				struct bat_priv *bat_priv);
 void mcast_add_own_MCA(struct batman_packet *batman_packet, int num_mca,
 		       struct list_head *bridge_mc_list,
 		       struct net_device *soft_iface);
@@ -31,6 +38,7 @@ int mcast_mca_bridge_seq_print_text(struct seq_file *seq, void *offset);
 void br_mc_cpy(char *dst, struct br_ip *src);
 #endif
 int mcast_mca_global_seq_print_text(struct seq_file *seq, void *offset);
+int mcast_init(struct bat_priv *bat_priv);
 void mcast_free(struct bat_priv *bat_priv);
 
 /* from multicast_flow.c */

@@ -23,6 +23,9 @@
 #include "hash.h"
 #include "multicast.h"
 #include "multicast_flow.h"
+#include "send.h"
+#include "hard-interface.h"
+#include "originator.h"
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 37)
 #define for_each_pmc_rcu(in_dev, pmc)				\
@@ -30,6 +33,800 @@
 	     pmc != NULL;					\
 	     pmc = rcu_dereference(pmc->next_rcu))
 #endif
+
+struct tracker_packet_state {
+	int mcast_num, dest_num;
+	struct mcast_entry *mcast_entry;
+	uint8_t *dest_entry;
+	int break_flag;
+};
+
+static void init_state_mcast_entry(struct tracker_packet_state *state,
+				   struct mcast_tracker_packet *tracker_packet)
+{
+	state->mcast_num = 0;
+	state->mcast_entry = (struct mcast_entry *)(tracker_packet + 1);
+	state->dest_entry = (uint8_t *)(state->mcast_entry + 1);
+	state->break_flag = 0;
+}
+
+static int check_state_mcast_entry(struct tracker_packet_state *state,
+				   struct mcast_tracker_packet *tracker_packet)
+{
+	if (state->mcast_num < tracker_packet->num_mcast_entries &&
+	    !state->break_flag)
+		return 1;
+
+	return 0;
+}
+
+static void inc_state_mcast_entry(struct tracker_packet_state *state)
+{
+	if (state->break_flag)
+		return;
+
+	state->mcast_num++;
+	state->mcast_entry = (struct mcast_entry *)state->dest_entry;
+	state->dest_entry = (uint8_t *)(state->mcast_entry + 1);
+}
+
+static void init_state_dest_entry(struct tracker_packet_state *state)
+{
+	state->dest_num = 0;
+	state->break_flag = 1;
+}
+
+static int check_state_dest_entry(struct tracker_packet_state *state)
+{
+	if (state->dest_num < state->mcast_entry->num_dest)
+		return 1;
+
+	state->break_flag = 0;
+	return 0;
+}
+
+static void inc_state_dest_entry(struct tracker_packet_state *state)
+{
+	state->dest_num++;
+	state->dest_entry += ETH_ALEN;
+}
+
+#define tracker_packet_for_each_dest(state, tracker_packet)		 \
+	for (init_state_mcast_entry(state, tracker_packet);		 \
+	     check_state_mcast_entry(state, tracker_packet);		 \
+	     inc_state_mcast_entry(state))				 \
+		for (init_state_dest_entry(state);			 \
+		     check_state_dest_entry(state);			 \
+		     inc_state_dest_entry(state))
+
+struct dest_entries_list {
+	struct list_head list;
+	uint8_t dest[6];
+	struct hard_iface *hard_iface;
+};
+
+struct mcast_entries_list {
+	struct list_head list;
+	uint8_t mcast_addr[6];
+	struct list_head dest_entries;
+};
+
+/* how long to wait until sending a multicast tracker packet */
+static int tracker_send_delay(struct bat_priv *bat_priv)
+{
+	int tracker_interval = atomic_read(&bat_priv->mcast_tracker_interval);
+
+	/* auto mode, set to 1/2 ogm interval */
+	if (!tracker_interval)
+		tracker_interval = atomic_read(&bat_priv->orig_interval) / 2;
+
+	/* multicast tracker packets get half as much jitter as ogms as they're
+	 * limited down to JITTER and not JITTER*2 */
+	return msecs_to_jiffies(tracker_interval -
+		   JITTER/2 + (random32() % JITTER));
+}
+
+static void mcast_tracker_start(struct bat_priv *bat_priv)
+{
+	/* adding some jitter */
+	unsigned long tracker_interval = tracker_send_delay(bat_priv);
+	queue_delayed_work(bat_event_workqueue, &bat_priv->mcast_tracker_work,
+			   tracker_interval);
+}
+
+static void mcast_tracker_stop(struct bat_priv *bat_priv)
+{
+	cancel_delayed_work_sync(&bat_priv->mcast_tracker_work);
+}
+
+void mcast_tracker_reset(struct bat_priv *bat_priv)
+{
+	mcast_tracker_stop(bat_priv);
+	mcast_tracker_start(bat_priv);
+}
+
+/**
+ * Searches if a certain multicast address of another originator is also
+ * one of ours.
+ *
+ * Returns -1 if no match could be found. Otherwise returns the number of
+ * the element in our mc_addr_list which matches.
+ *
+ * Caller needs to hold orig_node->mca_lock outside.
+ *
+ * @orig_node:		the originator we are refering to
+ * @mca_pos:		refers to the specific multicast address in orig_node's
+ *			mca buffer which we are trying to find a match for
+ * @mc_addr_list:	a list of our own multicast addresses
+ * @num_mcast_entries:	the number of our own multicast addresses
+ */
+static inline int find_mca_match(struct orig_node *orig_node,
+		int mca_pos, uint8_t *mc_addr_list, int num_mcast_entries)
+{
+	int pos;
+
+	for (pos = 0; pos < num_mcast_entries; pos++)
+		if (!memcmp(&mc_addr_list[pos*ETH_ALEN],
+			    &orig_node->mca_buff[ETH_ALEN*mca_pos], ETH_ALEN))
+			return pos;
+	return -1;
+}
+
+static struct sk_buff *build_tracker_packet_skb(int tracker_packet_len,
+						struct bat_priv *bat_priv)
+{
+	struct sk_buff *skb;
+	struct mcast_tracker_packet *tracker_packet;
+
+	skb = dev_alloc_skb(tracker_packet_len + sizeof(struct ethhdr));
+	if (!skb)
+		return NULL;
+
+	skb_reserve(skb, sizeof(struct ethhdr));
+	tracker_packet = (struct mcast_tracker_packet *)
+			 skb_put(skb, tracker_packet_len);
+
+	tracker_packet->packet_type = BAT_MCAST_TRACKER;
+	tracker_packet->version = COMPAT_VERSION;
+	memcpy(tracker_packet->orig, bat_priv->primary_if->net_dev->dev_addr,
+		ETH_ALEN);
+	tracker_packet->ttl = TTL;
+	tracker_packet->num_mcast_entries = 0;
+	memset(tracker_packet->align, 0, sizeof(tracker_packet->align));
+
+	return skb;
+}
+
+static void mcast_tracker_dests_free(struct list_head *dest_entries)
+{
+	struct dest_entries_list *dest_entry, *tmp;
+
+	list_for_each_entry_safe(dest_entry, tmp, dest_entries, list) {
+		list_del(&dest_entry->list);
+		kfree(dest_entry);
+	}
+}
+
+static int mcast_tracker_collect_dests(struct bat_priv *bat_priv,
+				       struct mcast_entries_list *mcast_entry)
+{
+	struct hashtable_t *hash = bat_priv->orig_hash;
+	struct orig_node *orig_node;
+	struct hlist_node *walk;
+	struct hlist_head *head;
+	struct dest_entries_list *dest_entry;
+	int i, j, num_dests = 0;
+
+	if (!hash)
+		goto out;
+
+	for (i = 0; i < hash->size; i++) {
+		head = &hash->table[i];
+
+		rcu_read_lock();
+		hlist_for_each_entry_rcu(orig_node, walk, head, hash_entry) {
+			if (!atomic_inc_not_zero(&orig_node->refcount))
+				continue;
+
+			spin_lock_bh(&orig_node->mca_lock);
+			for (j = 0; j < orig_node->num_mca; j++) {
+				if (memcmp(&orig_node->mca_buff[ETH_ALEN * j],
+					   mcast_entry->mcast_addr, ETH_ALEN))
+					continue;
+
+				dest_entry = kmalloc(sizeof(
+						struct dest_entries_list),
+						GFP_ATOMIC);
+				if (!dest_entry)
+					goto free;
+
+				memcpy(dest_entry->dest, orig_node->orig,
+				       ETH_ALEN);
+				list_add(&dest_entry->list,
+					 &mcast_entry->dest_entries);
+				num_dests++;
+				break;
+			}
+			spin_unlock_bh(&orig_node->mca_lock);
+			orig_node_free_ref(orig_node);
+		}
+		rcu_read_unlock();
+	}
+
+	goto out;
+
+free:
+	spin_unlock_bh(&orig_node->mca_lock);
+	rcu_read_unlock();
+	orig_node_free_ref(orig_node);
+
+	mcast_tracker_dests_free(&mcast_entry->dest_entries);
+	num_dests = 0;
+
+out:
+	return num_dests;
+	return 0;
+}
+
+static void mcast_tracker_collect_free(struct list_head *mcast_dest_list)
+{
+	struct mcast_entries_list *mcast_entry, *tmp;
+
+	list_for_each_entry_safe(mcast_entry, tmp, mcast_dest_list, list) {
+		mcast_tracker_dests_free(&mcast_entry->dest_entries);
+		list_del(&mcast_entry->list);
+		kfree(mcast_entry);
+	}
+}
+
+static int mcast_addr_add_collect_mcast(uint8_t *mcast_addr,
+					struct list_head *mcast_dest_list)
+{
+	struct mcast_entries_list *mcast_entry;
+
+	mcast_entry = kmalloc(sizeof(struct mcast_entries_list),
+			      GFP_ATOMIC);
+	if (!mcast_entry)
+		return -1;
+
+	memcpy(mcast_entry->mcast_addr, mcast_addr, ETH_ALEN);
+	INIT_LIST_HEAD(&mcast_entry->dest_entries);
+	list_add(&mcast_entry->list, mcast_dest_list);
+
+	return 0;
+}
+
+static void mcast_tracker_collect_mcasts(struct bat_priv *bat_priv,
+					 struct list_head *mcast_dest_list)
+{
+	struct mcast_flow_entry *flow_entry;
+	struct hlist_node *node;
+	int threshold_state;
+
+	rcu_read_lock();
+	hlist_for_each_entry_rcu(flow_entry, node,
+				 &bat_priv->mcast_flow_table, list) {
+		if (!atomic_inc_not_zero(&flow_entry->refcount))
+			continue;
+
+		threshold_state = update_flow_entry(flow_entry, bat_priv, 0);
+		if (!threshold_state) {
+			flow_entry_free_ref(flow_entry);
+			continue;
+		}
+
+		if (mcast_addr_add_collect_mcast(flow_entry->mcast_addr,
+						 mcast_dest_list) < 0)
+			goto free;
+
+		flow_entry_free_ref(flow_entry);
+	}
+	rcu_read_unlock();
+	return;
+
+free:
+	/* Out-of-memory, free all */
+	flow_entry_free_ref(flow_entry);
+	mcast_tracker_collect_free(mcast_dest_list);
+}
+
+static int mcast_tracker_collect(struct bat_priv *bat_priv,
+				 struct list_head *mcast_dest_list)
+{
+	struct mcast_entries_list *mcast_entry, *tmp;
+	struct dest_entries_list *dest_entry;
+	int tracker_packet_len = sizeof(struct mcast_tracker_packet);
+	int used_mcast_entries = 0, reduced = 0;
+
+	list_for_each_entry_safe(mcast_entry, tmp, mcast_dest_list, list) {
+		tracker_packet_len += sizeof(struct mcast_entry);
+		if (used_mcast_entries == UINT8_MAX ||
+		    tracker_packet_len + ETH_ALEN > ETH_DATA_LEN) {
+			reduced = 1;
+			goto del;
+		}
+
+		tracker_packet_len += ETH_ALEN *
+			mcast_tracker_collect_dests(bat_priv, mcast_entry);
+
+		if (list_empty(&mcast_entry->dest_entries)) {
+del:
+			tracker_packet_len -= sizeof(struct mcast_entry);
+			list_del(&mcast_entry->list);
+			kfree(mcast_entry);
+			continue;
+		}
+
+		while (tracker_packet_len > ETH_DATA_LEN) {
+			/* list won't get empty here due to the
+			 * previous checks */
+			reduced = 1;
+			dest_entry = list_first_entry(
+					       &mcast_entry->dest_entries,
+					       struct dest_entries_list, list);
+			list_del(&dest_entry->list);
+			kfree(dest_entry);
+			tracker_packet_len -= ETH_ALEN;
+		}
+
+		used_mcast_entries++;
+	}
+
+	if (!used_mcast_entries)
+		tracker_packet_len = 0;
+	else if (reduced)
+		pr_warning("mcast tracker packet got too large, "
+			   "forcing reduced size of %i Bytes\n",
+			   tracker_packet_len);
+
+	return tracker_packet_len;
+}
+
+void mcast_tracker_skb_attach(struct sk_buff *skb,
+			      struct list_head *mcast_dest_list)
+{
+	struct mcast_tracker_packet *tracker_packet;
+	struct mcast_entry *mcast_entry;
+	struct mcast_entries_list *mcast;
+	struct dest_entries_list *dest;
+	uint8_t *dest_entry;
+
+	tracker_packet = (struct mcast_tracker_packet *)skb->data;
+	mcast_entry = (struct mcast_entry *)(tracker_packet + 1);
+
+	list_for_each_entry(mcast, mcast_dest_list, list) {
+		tracker_packet->num_mcast_entries++;
+		mcast_entry->num_dest = 0;
+		mcast_entry->align = 0;
+		memcpy(mcast_entry->mcast_addr, mcast->mcast_addr, ETH_ALEN);
+		dest_entry = (uint8_t *)(mcast_entry + 1);
+
+		list_for_each_entry(dest, &mcast->dest_entries, list) {
+			mcast_entry->num_dest++;
+			memcpy(dest_entry, dest->dest, ETH_ALEN);
+
+			dest_entry += ETH_ALEN;
+		}
+		mcast_entry = (struct mcast_entry *)dest_entry;
+	}
+}
+
+/**
+ * Prepares a multicast tracker packet on a multicast member with all its
+ * groups and their members attached. Note, that the proactive tracking
+ * mode does not differentiate between multicast senders and receivers,
+ * resulting in tracker packets between each node.
+ *
+ * Returns NULL if this node is not a member of any group or if there are
+ * no other members in its groups.
+ *
+ * @bat_priv:		bat_priv for the mesh we are preparing this packet
+ */
+static struct sk_buff *mcast_tracker_prepare(struct bat_priv *bat_priv,
+					     struct list_head *mcast_dest_list)
+{
+	struct sk_buff *skb = NULL;
+	int tracker_packet_len;
+
+	tracker_packet_len = mcast_tracker_collect(bat_priv, mcast_dest_list);
+	if (!tracker_packet_len)
+		goto out;
+
+	/* prepare tracker packet */
+	skb = build_tracker_packet_skb(tracker_packet_len, bat_priv);
+	if (!skb)
+		goto free;
+
+	/* append all collected entries */
+	mcast_tracker_skb_attach(skb, mcast_dest_list);
+
+	/* outstanding cleanup */
+free:
+	mcast_tracker_collect_free(mcast_dest_list);
+out:
+
+	return skb;
+}
+
+static struct sk_buff *mcast_periodic_tracker_prepare(
+						struct bat_priv *bat_priv)
+{
+	struct list_head mcast_dest_list;
+
+	INIT_LIST_HEAD(&mcast_dest_list);
+	mcast_tracker_collect_mcasts(bat_priv, &mcast_dest_list);
+
+	return mcast_tracker_prepare(bat_priv, &mcast_dest_list);
+}
+
+/* Adds the router for the destination address to the next_hop list and its
+ * interface to the forw_if_list - but only if this router has not been
+ * added yet */
+static int add_router_of_dest(struct dest_entries_list *next_hops,
+			      uint8_t *dest, struct bat_priv *bat_priv)
+{
+	struct dest_entries_list *next_hop_tmp, *next_hop_entry;
+	struct orig_node *orig_node = NULL;
+	struct neigh_node *router = NULL;
+	int ret = 1;
+
+
+	next_hop_entry = kmalloc(sizeof(struct dest_entries_list), GFP_ATOMIC);
+	if (!next_hop_entry)
+		goto out;
+
+	orig_node = orig_hash_find(bat_priv, dest);
+	if (!orig_node)
+		goto free;
+
+	router = orig_node_get_router(orig_node);
+	if (!router)
+		goto free;
+
+	rcu_read_lock();
+	if (!router->if_incoming ||
+	    !atomic_inc_not_zero(&router->if_incoming->refcount)) {
+		rcu_read_unlock();
+		goto free;
+	}
+	next_hop_entry->hard_iface = router->if_incoming;
+	rcu_read_unlock();
+
+	memcpy(next_hop_entry->dest, router->addr, ETH_ALEN);
+
+	list_for_each_entry(next_hop_tmp, &next_hops->list, list)
+		if (!memcmp(next_hop_tmp->dest, next_hop_entry->dest,
+								ETH_ALEN))
+			goto kref_free;
+
+	list_add(&next_hop_entry->list, &next_hops->list);
+
+	ret = 0;
+	goto out;
+
+kref_free:
+	hardif_free_ref(next_hop_entry->hard_iface);
+free:
+	kfree(next_hop_entry);
+	if (router)
+		neigh_node_free_ref(router);
+	if (orig_node)
+		orig_node_free_ref(orig_node);
+out:
+	return ret;
+}
+
+/* Collect nexthops for all dest entries specified in this tracker packet.
+ * It also reduces the number of elements in the tracker packet if they exceed
+ * the buffers length (e.g. because of a received, broken tracker packet) to
+ * avoid writing in unallocated memory. */
+static int tracker_next_hops(struct mcast_tracker_packet *tracker_packet,
+			     int tracker_packet_len,
+			     struct dest_entries_list *next_hops,
+			     struct bat_priv *bat_priv)
+{
+	int num_next_hops = 0, ret;
+	struct tracker_packet_state state;
+	uint8_t *tail = (uint8_t *)tracker_packet + tracker_packet_len;
+
+	INIT_LIST_HEAD(&next_hops->list);
+
+	tracker_packet_for_each_dest(&state, tracker_packet) {
+		/* avoid writing outside of unallocated memory later */
+		if (state.dest_entry + ETH_ALEN > tail) {
+			bat_dbg(DBG_BATMAN, bat_priv,
+				"mcast tracker packet is broken, too many "
+				"entries claimed for its length, repairing");
+
+			tracker_packet->num_mcast_entries = state.mcast_num;
+
+			if (state.dest_num) {
+				tracker_packet->num_mcast_entries++;
+				state.mcast_entry->num_dest = state.dest_num;
+			}
+
+			break;
+		}
+
+		ret = add_router_of_dest(next_hops, state.dest_entry,
+					 bat_priv);
+		if (!ret)
+			num_next_hops++;
+	}
+
+	return num_next_hops;
+}
+
+/* Zero destination entries not destined for the specified next hop in the
+ * tracker packet */
+static void zero_tracker_packet(struct mcast_tracker_packet *tracker_packet,
+				uint8_t *next_hop, struct bat_priv *bat_priv)
+{
+	struct tracker_packet_state state;
+	struct orig_node *orig_node;
+	struct neigh_node *router;
+
+	tracker_packet_for_each_dest(&state, tracker_packet) {
+		router = NULL;
+		orig_node = orig_hash_find(bat_priv, state.dest_entry);
+		/* we don't know this destination */
+		if (!orig_node)
+			goto erase;
+
+		/* is the next hop already our destination? */
+		if (!memcmp(orig_node->orig, next_hop, ETH_ALEN))
+			goto erase;
+
+		router = orig_node_get_router(orig_node);
+		if (!router)
+			goto erase;
+
+		if (!memcmp(router->orig_node->primary_addr,
+			    orig_node->orig, ETH_ALEN) ||
+		    /* is this the wrong next hop for our
+		     * destination? */
+		    memcmp(router->addr, next_hop, ETH_ALEN))
+			goto erase;
+
+		goto free;
+erase:
+		memset(state.dest_entry, '\0', ETH_ALEN);
+free:
+		if (orig_node)
+			orig_node_free_ref(orig_node);
+		if (router)
+			neigh_node_free_ref(router);
+	}
+}
+
+/* Remove zeroed destination entries and empty multicast entries in tracker
+ * packet */
+static void shrink_tracker_packet(struct sk_buff *skb)
+{
+	struct mcast_tracker_packet *tracker_packet =
+				(struct mcast_tracker_packet *)skb->data;
+	struct tracker_packet_state state;
+	unsigned char *tail = skb_tail_pointer(skb);
+	int new_tracker_packet_len = sizeof(struct mcast_tracker_packet);
+
+	tracker_packet_for_each_dest(&state, tracker_packet) {
+		if (memcmp(state.dest_entry, "\0\0\0\0\0\0", ETH_ALEN)) {
+			new_tracker_packet_len += ETH_ALEN;
+			continue;
+		}
+
+		memmove(state.dest_entry, state.dest_entry + ETH_ALEN,
+			tail - state.dest_entry - ETH_ALEN);
+
+		state.mcast_entry->num_dest--;
+		tail -= ETH_ALEN;
+
+		if (state.mcast_entry->num_dest) {
+			state.dest_num--;
+			state.dest_entry -= ETH_ALEN;
+			continue;
+		}
+
+		/* = mcast_entry */
+		state.dest_entry -= sizeof(struct mcast_entry);
+
+		memmove(state.dest_entry, state.dest_entry +
+			sizeof(struct mcast_entry),
+			tail - state.dest_entry - sizeof(struct mcast_entry));
+
+		tracker_packet->num_mcast_entries--;
+		tail -= sizeof(struct mcast_entry);
+
+		state.mcast_num--;
+
+		/* Avoid mcast_entry check of tracker_packet_for_each_dest's
+		 * inner loop */
+		state.break_flag = 0;
+		break;
+	}
+
+	new_tracker_packet_len += sizeof(struct mcast_entry) *
+				  tracker_packet->num_mcast_entries;
+
+	skb_trim(skb, new_tracker_packet_len);
+}
+
+static int mcast_tracker_dec_ttl(struct mcast_tracker_packet *packet)
+{
+	if (packet->ttl - 1 <= 0)
+		return 0;
+
+	packet->ttl--;
+	return 1;
+}
+
+/**
+ * Sends (splitted parts of) a multicast tracker packet on the according
+ * interfaces.
+ *
+ * @tracker_packet:	A compact multicast tracker packet with all groups and
+ *			destinations attached.
+ */
+void route_mcast_tracker_packet(struct sk_buff *skb,
+				struct bat_priv *bat_priv)
+{
+	struct dest_entries_list next_hops, *tmp;
+	struct dest_entries_list *next_hop;
+	struct sk_buff *skb_tmp;
+	int num_next_hops;
+
+	num_next_hops = tracker_next_hops((struct mcast_tracker_packet *)
+				skb->data, skb->len, &next_hops, bat_priv);
+	if (!num_next_hops)
+		return;
+
+	if (!mcast_tracker_dec_ttl((struct mcast_tracker_packet *)skb->data))
+		return;
+
+	list_for_each_entry(next_hop, &next_hops.list, list) {
+		skb_tmp = skb_copy(skb, GFP_ATOMIC);
+		if (!skb_tmp)
+			goto free;
+
+		/* cut the tracker packets for the according destinations */
+		zero_tracker_packet((struct mcast_tracker_packet *)
+				skb_tmp->data, next_hop->dest, bat_priv);
+		shrink_tracker_packet(skb_tmp);
+		if (skb_tmp->len == sizeof(struct mcast_tracker_packet)) {
+			dev_kfree_skb(skb_tmp);
+			continue;
+		}
+
+		/* Send 'em! */
+		send_skb_packet(skb_tmp, next_hop->hard_iface, next_hop->dest);
+	}
+
+free:
+	list_for_each_entry_safe(next_hop, tmp, &next_hops.list, list) {
+		hardif_free_ref(next_hop->hard_iface);
+		list_del(&next_hop->list);
+		kfree(next_hop);
+	}
+}
+
+static void mcast_tracker_timer(struct work_struct *work)
+{
+	struct bat_priv *bat_priv = container_of(work, struct bat_priv,
+						 mcast_tracker_work.work);
+	struct sk_buff *tracker_packet = NULL;
+
+	if (atomic_read(&bat_priv->mcast_group_awareness))
+		tracker_packet = mcast_periodic_tracker_prepare(bat_priv);
+
+	if (!tracker_packet)
+		goto out;
+
+	route_mcast_tracker_packet(tracker_packet, bat_priv);
+	dev_kfree_skb(tracker_packet);
+
+out:
+	mcast_tracker_start(bat_priv);
+}
+
+int mcast_tracker_interval_set(struct net_device *net_dev, char *buff,
+			       size_t count)
+{
+	struct bat_priv *bat_priv = netdev_priv(net_dev);
+	unsigned long new_tracker_interval;
+	int cur_tracker_interval;
+	int ret;
+
+	ret = strict_strtoul(buff, 10, &new_tracker_interval);
+
+	if (ret && !strncmp(buff, "auto", 4)) {
+		new_tracker_interval = 0;
+		goto ok;
+	}
+
+	else if (ret) {
+		bat_info(net_dev, "Invalid parameter for "
+			 "'mcast_tracker_interval' setting received: %s\n",
+			 buff);
+		return -EINVAL;
+	}
+
+	if (new_tracker_interval < JITTER) {
+		bat_info(net_dev, "New mcast tracker interval too small: %li "
+			 "(min: %i or auto)\n", new_tracker_interval, JITTER);
+		return -EINVAL;
+	}
+
+ok:
+	cur_tracker_interval = atomic_read(&bat_priv->mcast_tracker_interval);
+
+	if (cur_tracker_interval == new_tracker_interval)
+		return count;
+
+	if (!cur_tracker_interval && new_tracker_interval)
+		bat_info(net_dev, "Tracker interval change from: %s to: %li\n",
+			 "auto", new_tracker_interval);
+	else if (cur_tracker_interval && !new_tracker_interval)
+		bat_info(net_dev, "Tracker interval change from: %i to: %s\n",
+			 cur_tracker_interval, "auto");
+	else
+		bat_info(net_dev, "Tracker interval change from: %i to: %li\n",
+			 cur_tracker_interval, new_tracker_interval);
+
+	atomic_set(&bat_priv->mcast_tracker_interval, new_tracker_interval);
+
+	mcast_tracker_reset(bat_priv);
+
+	return count;
+}
+
+int mcast_tracker_timeout_set(struct net_device *net_dev, char *buff,
+			       size_t count)
+{
+	struct bat_priv *bat_priv = netdev_priv(net_dev);
+	unsigned long new_tracker_timeout;
+	int cur_tracker_timeout;
+	int ret;
+
+	ret = strict_strtoul(buff, 10, &new_tracker_timeout);
+
+	if (ret && !strncmp(buff, "auto", 4)) {
+		new_tracker_timeout = 0;
+		goto ok;
+	}
+
+	else if (ret) {
+		bat_info(net_dev, "Invalid parameter for "
+			 "'mcast_tracker_timeout' setting received: %s\n",
+			 buff);
+		return -EINVAL;
+	}
+
+	if (new_tracker_timeout < JITTER) {
+		bat_info(net_dev, "New mcast tracker timeout too small: %li "
+			 "(min: %i or auto)\n", new_tracker_timeout, JITTER);
+		return -EINVAL;
+	}
+
+ok:
+	cur_tracker_timeout = atomic_read(&bat_priv->mcast_tracker_timeout);
+
+	if (cur_tracker_timeout == new_tracker_timeout)
+		return count;
+
+	if (!cur_tracker_timeout && new_tracker_timeout)
+		bat_info(net_dev, "Tracker timeout change from: %s to: %li\n",
+			 "auto", new_tracker_timeout);
+	else if (cur_tracker_timeout && !new_tracker_timeout)
+		bat_info(net_dev, "Tracker timeout change from: %i to: %s\n",
+			 cur_tracker_timeout, "auto");
+	else
+		bat_info(net_dev, "Tracker timeout change from: %i to: %li\n",
+			 cur_tracker_timeout, new_tracker_timeout);
+
+	atomic_set(&bat_priv->mcast_tracker_timeout, new_tracker_timeout);
+
+	return count;
+}
 
 #ifdef CONFIG_BATMAN_ADV_BR_MC_SNOOP
 void br_mc_cpy(char *dst, struct br_ip *src)
@@ -296,7 +1093,17 @@ int mcast_mca_global_seq_print_text(struct seq_file *seq, void *offset)
 	return 0;
 }
 
+int mcast_init(struct bat_priv *bat_priv)
+{
+	INIT_DELAYED_WORK(&bat_priv->mcast_tracker_work, mcast_tracker_timer);
+
+	mcast_tracker_start(bat_priv);
+
+	return 1;
+}
+
 void mcast_free(struct bat_priv *bat_priv)
 {
 	mcast_flow_table_free(bat_priv);
+	mcast_tracker_stop(bat_priv);
 }

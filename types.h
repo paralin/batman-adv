@@ -149,6 +149,8 @@ struct bat_priv {
 	atomic_t mcast_threshold_count;	/* uint */
 	atomic_t mcast_threshold_interval; /* uint */
 	atomic_t mcast_grace_period;	/* uint */
+	atomic_t mcast_tracker_interval;/* uint, auto */
+	atomic_t mcast_tracker_timeout; /* uint, auto */
 	atomic_t log_level;		/* uint */
 	atomic_t bcast_seqno;
 	atomic_t bcast_queue_left;
@@ -183,6 +185,7 @@ struct bat_priv {
 	struct delayed_work hna_work;
 	struct delayed_work orig_work;
 	struct delayed_work vis_work;
+	struct delayed_work mcast_tracker_work;
 	struct gw_node __rcu *curr_gw;  /* rcu protected pointer */
 	struct vis_info *my_vis_info;
 };
