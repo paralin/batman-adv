@@ -51,7 +51,8 @@ void batadv_mcast_tracker_reset(struct net_device *net_dev);
 int batadv_mcast_tracker_interval_set(struct net_device *net_dev, char *buff,
 				      size_t count);
 void batadv_mcast_tracker_packet_route(struct sk_buff *skb,
-				       struct batadv_priv *bat_priv);
+				       struct batadv_priv *bat_priv,
+				       int num_redundancy);
 
 /* from multicast_forw.c */
 void batadv_mcast_forw_table_purge(struct batadv_priv *bat_priv);

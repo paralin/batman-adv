@@ -35,6 +35,8 @@
 #include "hard-interface.h"
 #include "send.h"
 
+#define TRACKER_BURST_EXTRA 2
+
 /**
  * batadv_tracker_packet_state - Tracker packet iterator state
  * @mcast_num:	Index of the current multicast address entry
@@ -600,6 +602,30 @@ static struct sk_buff *batadv_mcast_periodic_tracker_prepare(
 }
 
 /**
+ * batadv_mcast_reactive_tracker_prepare - Creates a specific tracker packet
+ * @mcast_addr:	The multicast address to create this packet for
+ * @bat_priv:	bat_priv for the mesh we are preparing this packet
+ *
+ * Creates a tracker packet for the given multicast address with its
+ * according destinations determined by the previously buffered multicast
+ * listener announcements.
+ *
+ * Returns NULL if no tracker packet destinations were found.
+ * Otherwise returns the created, filled tracker packet.
+ */
+static struct sk_buff *batadv_mcast_reactive_tracker_prepare(
+						uint8_t *mcast_addr,
+						struct batadv_priv *bat_priv)
+{
+	struct list_head mcast_dest_list;
+
+	INIT_LIST_HEAD(&mcast_dest_list);
+	batadv_mcast_addr_add_collect(mcast_addr, &mcast_dest_list);
+
+	return batadv_mcast_tracker_prepare(bat_priv, &mcast_dest_list);
+}
+
+/**
  * batadv_mcast_add_router_of_dest - Adds the next hop for a destination
  * @next_hops:		The list to add a new next hop to
  * @dest:		The destination to find the next hop for
@@ -883,25 +909,28 @@ static int batadv_mcast_tracker_dec_ttl(
  * @skb:	A compact multicast tracker packet with all groups and
  *		destinations attached.
  * @bat_priv:	bat_priv for the mesh we are routing this tracker packet
+ * @num_redundancy:	Number of extra packets to send
  *
  * This function iterates over the destination entries of the given
  * tracker packet and sorts them into new tracker packets matching
  * their next hops according to the unicast routing algorithm.
  *
  * It then sends those new tracker packets, this partition of the original
- * tracker packet, to their according next hop each.
+ * tracker packet, to their according next hop num_redundancy plus one
+ * times each.
  *
  * Finally it also updates its own multicast routing table with the
  * information gained from incoming tracker packet.
  */
 void batadv_mcast_tracker_packet_route(struct sk_buff *skb,
-				       struct batadv_priv *bat_priv)
+				       struct batadv_priv *bat_priv,
+				       int num_redundancy)
 {
 	struct batadv_dest_entries_list next_hops, *tmp;
 	struct batadv_dest_entries_list *next_hop;
 	struct hlist_head forw_table;
-	struct sk_buff *skb_tmp;
-	int num_next_hops;
+	struct sk_buff *skb_tmp, *skb_cloned;
+	int i, num_next_hops;
 
 	num_next_hops = batadv_mcast_tracker_next_hops(
 				(struct batadv_mcast_tracker_packet *)skb->data,
@@ -929,6 +958,16 @@ void batadv_mcast_tracker_packet_route(struct sk_buff *skb,
 		    sizeof(struct batadv_mcast_tracker_packet)) {
 			dev_kfree_skb(skb_tmp);
 			continue;
+		}
+
+		for (i = 0; i < num_redundancy; i++) {
+			skb_cloned = skb_clone(skb_tmp, GFP_ATOMIC);
+			if (!skb_cloned)
+				break;
+
+			batadv_send_skb_packet(skb_cloned,
+					       next_hop->hard_iface,
+					       next_hop->dest);
 		}
 
 		/* Send 'em! */
@@ -971,10 +1010,34 @@ void batadv_mcast_tracker_timer(struct work_struct *work)
 	if (!tracker_packet)
 		goto out;
 
-	batadv_mcast_tracker_packet_route(tracker_packet, bat_priv);
+	batadv_mcast_tracker_packet_route(tracker_packet, bat_priv, 0);
 	dev_kfree_skb(tracker_packet);
 
 out:
 	/* Reschedule */
 	batadv_mcast_tracker_start(bat_priv);
+}
+
+/**
+ * batadv_mcast_tracker_burst - Creates and sends a burst of tracker packets
+ * @mcast_addr:	The multicast address to create these packets for
+ * @bat_priv:	bat_priv for the mesh we are preparing this tracker packet
+ *
+ * This method creates a tracker packet for the given multicast address,
+ * splits it for their according next hops and their interfaces and
+ * finally transmits them with a few redundant ones each.
+ */
+void batadv_mcast_tracker_burst(uint8_t *mcast_addr,
+				struct batadv_priv *bat_priv)
+{
+	struct sk_buff *tracker_packet;
+
+	tracker_packet = batadv_mcast_reactive_tracker_prepare(mcast_addr,
+							       bat_priv);
+	if (!tracker_packet)
+		return;
+
+	batadv_mcast_tracker_packet_route(tracker_packet, bat_priv,
+					  TRACKER_BURST_EXTRA);
+	dev_kfree_skb(tracker_packet);
 }

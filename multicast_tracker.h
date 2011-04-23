@@ -25,5 +25,7 @@
 void batadv_mcast_tracker_timer(struct work_struct *work);
 void batadv_mcast_tracker_start(struct batadv_priv *bat_priv);
 void batadv_mcast_tracker_stop(struct batadv_priv *bat_priv);
+void batadv_mcast_tracker_burst(uint8_t *mcast_addr,
+				struct batadv_priv *bat_priv);
 
 #endif /* _NET_BATMAN_ADV_MULTICAST_H_ */

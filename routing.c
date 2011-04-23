@@ -1261,7 +1261,7 @@ int batadv_recv_mcast_tracker_packet(struct sk_buff *skb,
 	if (batadv_check_unicast_packet(skb, hdr_size) < 0)
 		return NET_RX_DROP;
 
-	batadv_mcast_tracker_packet_route(skb, bat_priv);
+	batadv_mcast_tracker_packet_route(skb, bat_priv, 0);
 
 	dev_kfree_skb(skb);
 

@@ -28,6 +28,7 @@
 
 #include "main.h"
 #include "multicast_flow.h"
+#include "multicast_tracker.h"
 #include "hash.h"
 
 enum batadv_mcast_flow_threshold_state {
@@ -316,6 +317,9 @@ out:
  * This increases the internal counter for the specified multicast group
  * (more precisely, this multicast MAC address).
  *
+ * If the configured threshold for this multicast MAC address is met with
+ * this update then a burst of tracker packets will be send immediately.
+ *
  * Further returns 1 if the configured threshold and grace period
  * for this multicast MAC address are met to indicate the availability of
  * a multicast forwarding tree.
@@ -349,6 +353,7 @@ skip:
 	threshold_state = batadv_mcast_flow_update_entry(entry, bat_priv, 1);
 	switch (threshold_state) {
 	case BATADV_MCAST_THRESHOLD_UP:
+		batadv_mcast_tracker_burst(mcast_addr, bat_priv);
 	case BATADV_MCAST_THRESHOLD_HIGH:
 		if (time_after(jiffies, entry->grace_period_timeout)) {
 			ret = 1;
