@@ -1570,7 +1570,7 @@ int recv_mcast_tracker_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	if (check_unicast_packet(skb, hdr_size) < 0)
 		return NET_RX_DROP;
 
-	route_mcast_tracker_packet(skb, bat_priv);
+	route_mcast_tracker_packet(skb, bat_priv, 0);
 
 	dev_kfree_skb(skb);
 

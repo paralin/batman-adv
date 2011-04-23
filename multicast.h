@@ -28,7 +28,9 @@ int mcast_tracker_interval_set(struct net_device *net_dev, char *buff,
 int mcast_tracker_timeout_set(struct net_device *net_dev, char *buff,
 			       size_t count);
 void route_mcast_tracker_packet(struct sk_buff *tracker_packet,
-				struct bat_priv *bat_priv);
+				struct bat_priv *bat_priv,
+				int num_redundancy);
+void mcast_tracker_burst(uint8_t *mcast_addr, struct bat_priv *bat_priv);
 void purge_mcast_forw_table(struct bat_priv *bat_priv);
 void mcast_add_own_MCA(struct batman_packet *batman_packet, int num_mca,
 		       struct list_head *bridge_mc_list,

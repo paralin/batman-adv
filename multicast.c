@@ -30,6 +30,7 @@
 /* If auto mode for tracker timeout has been selected,
  * how many times of tracker_interval to wait */
 #define TRACKER_TIMEOUT_AUTO_X 5
+#define TRACKER_BURST_EXTRA 2
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 37)
 #define for_each_pmc_rcu(in_dev, pmc)				\
@@ -728,6 +729,17 @@ static struct sk_buff *mcast_periodic_tracker_prepare(
 	return mcast_tracker_prepare(bat_priv, &mcast_dest_list);
 }
 
+static struct sk_buff *mcast_reactive_tracker_prepare(uint8_t *mcast_addr,
+						     struct bat_priv *bat_priv)
+{
+	struct list_head mcast_dest_list;
+
+	INIT_LIST_HEAD(&mcast_dest_list);
+	mcast_addr_add_collect_mcast(mcast_addr, &mcast_dest_list);
+
+	return mcast_tracker_prepare(bat_priv, &mcast_dest_list);
+}
+
 /* Adds the router for the destination address to the next_hop list and its
  * interface to the forw_if_list - but only if this router has not been
  * added yet */
@@ -955,13 +967,14 @@ static int mcast_tracker_dec_ttl(struct mcast_tracker_packet *packet)
  *			destinations attached.
  */
 void route_mcast_tracker_packet(struct sk_buff *skb,
-				struct bat_priv *bat_priv)
+				struct bat_priv *bat_priv,
+				int num_redundancy)
 {
 	struct dest_entries_list next_hops, *tmp;
 	struct dest_entries_list *next_hop;
 	struct hlist_head forw_table;
-	struct sk_buff *skb_tmp;
-	int num_next_hops;
+	struct sk_buff *skb_tmp, *skb_cloned;
+	int i, num_next_hops;
 
 	num_next_hops = tracker_next_hops((struct mcast_tracker_packet *)
 					  skb->data, skb->len, &next_hops,
@@ -986,6 +999,15 @@ void route_mcast_tracker_packet(struct sk_buff *skb,
 		if (skb_tmp->len == sizeof(struct mcast_tracker_packet)) {
 			dev_kfree_skb(skb_tmp);
 			continue;
+		}
+
+		for (i = 0; i < num_redundancy; i++) {
+			skb_cloned = skb_clone(skb_tmp, GFP_ATOMIC);
+			if (!skb_cloned)
+				break;
+
+			send_skb_packet(skb_cloned, next_hop->hard_iface,
+					next_hop->dest);
 		}
 
 		/* Send 'em! */
@@ -1120,11 +1142,24 @@ static void mcast_tracker_timer(struct work_struct *work)
 	if (!tracker_packet)
 		goto out;
 
-	route_mcast_tracker_packet(tracker_packet, bat_priv);
+	route_mcast_tracker_packet(tracker_packet, bat_priv, 0);
 	dev_kfree_skb(tracker_packet);
 
 out:
 	mcast_tracker_start(bat_priv);
+}
+
+void mcast_tracker_burst(uint8_t *mcast_addr, struct bat_priv *bat_priv)
+{
+	struct sk_buff *tracker_packet;
+
+	tracker_packet = mcast_reactive_tracker_prepare(mcast_addr, bat_priv);
+	if (!tracker_packet)
+		return;
+
+	route_mcast_tracker_packet(tracker_packet, bat_priv,
+				   TRACKER_BURST_EXTRA);
+	dev_kfree_skb(tracker_packet);
 }
 
 int mcast_tracker_interval_set(struct net_device *net_dev, char *buff,

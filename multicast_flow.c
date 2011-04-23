@@ -20,6 +20,7 @@
  */
 
 #include "main.h"
+#include "multicast.h"
 #include "multicast_flow.h"
 #include "hash.h"
 
@@ -254,6 +255,9 @@ static int mcast_update_flow_table(uint8_t *mcast_addr,
 
 skip:
 	threshold_state = update_flow_entry(entry, bat_priv, 1);
+	if (threshold_state > 0)
+		mcast_tracker_burst(mcast_addr, bat_priv);
+
 	if (threshold_state) {
 		if (time_after(jiffies, entry->grace_period_timeout)) {
 			ret = 1;
