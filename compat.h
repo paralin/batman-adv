@@ -136,6 +136,7 @@ void batadv_free_rcu_neigh_node(struct rcu_head *rcu);
 void batadv_free_rcu_tt_local_entry(struct rcu_head *rcu);
 void batadv_free_rcu_backbone_gw(struct rcu_head *rcu);
 void batadv_free_rcu_dat_entry(struct rcu_head *rcu);
+void batadv_free_rcu_block_entry(struct rcu_head *rcu);
 
 static inline void skb_reset_mac_len(struct sk_buff *skb)
 {

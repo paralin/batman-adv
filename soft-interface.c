@@ -505,6 +505,8 @@ struct net_device *batadv_softif_create(const char *name)
 #endif
 	bat_priv->tt.last_changeset = NULL;
 	bat_priv->tt.last_changeset_len = 0;
+	atomic_set(&bat_priv->block_ogm_allow_cnt, 0);
+
 
 	bat_priv->primary_if = NULL;
 	bat_priv->num_ifaces = 0;

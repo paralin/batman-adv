@@ -32,6 +32,7 @@
 #include "icmp_socket.h"
 #include "bridge_loop_avoidance.h"
 #include "distributed-arp-table.h"
+#include "block_ogm.h"
 
 static struct dentry *batadv_debugfs;
 
@@ -434,6 +435,9 @@ int batadv_debugfs_add_meshif(struct net_device *dev)
 	if (batadv_debug_log_setup(bat_priv) < 0)
 		goto rem_attr;
 
+	if (batadv_block_file_setup(bat_priv) < 0)
+		goto rem_attr;
+
 	for (bat_debug = batadv_mesh_debuginfos; *bat_debug; ++bat_debug) {
 		file = debugfs_create_file(((*bat_debug)->attr).name,
 					   S_IFREG | ((*bat_debug)->attr).mode,
@@ -463,6 +467,7 @@ void batadv_debugfs_del_meshif(struct net_device *dev)
 	struct batadv_priv *bat_priv = netdev_priv(dev);
 
 	batadv_debug_log_cleanup(bat_priv);
+	batadv_block_file_cleanup(bat_priv);
 
 	if (batadv_debugfs) {
 		debugfs_remove_recursive(bat_priv->debug_dir);

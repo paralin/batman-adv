@@ -122,6 +122,7 @@ struct batadv_orig_node {
 	spinlock_t tt_list_lock; /* protects tt_list */
 	atomic_t bond_candidates;
 	struct list_head bond_list;
+	atomic_t block_action; /* Boolean */
 };
 
 struct batadv_gw_node {
@@ -308,6 +309,9 @@ struct batadv_priv {
 #ifdef CONFIG_BATMAN_ADV_DAT
 	struct batadv_priv_dat dat;
 #endif
+	struct list_head block_list;
+	spinlock_t block_lock;
+	atomic_t block_ogm_allow_cnt; /* uint */
 };
 
 struct batadv_socket_client {
@@ -511,6 +515,14 @@ struct batadv_dat_entry {
 struct batadv_dat_candidate {
 	int type;
 	struct batadv_orig_node *orig_node;
+};
+
+struct batadv_block_entry {
+	struct list_head list;
+	uint8_t addr[ETH_ALEN];
+	uint8_t action;
+	struct rcu_head rcu;
+	atomic_t refcount; /* uint */
 };
 
 #endif /* _NET_BATMAN_ADV_TYPES_H_ */

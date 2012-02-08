@@ -29,6 +29,7 @@
 #include "unicast.h"
 #include "bridge_loop_avoidance.h"
 #include "distributed-arp-table.h"
+#include "block_ogm.h"
 
 static int batadv_route_unicast_packet(struct sk_buff *skb,
 				       struct batadv_hard_iface *recv_if);
@@ -260,6 +261,10 @@ bool batadv_check_management_packet(struct sk_buff *skb,
 		return false;
 
 	ethhdr = (struct ethhdr *)skb_mac_header(skb);
+
+	/* Packet is blocked by user */
+	if (batadv_block_ogm(hard_iface, ethhdr->h_source))
+		return false;
 
 	/* packet with broadcast indication but unicast recipient */
 	if (!is_broadcast_ether_addr(ethhdr->h_dest))

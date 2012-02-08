@@ -28,6 +28,7 @@
 #include "unicast.h"
 #include "soft-interface.h"
 #include "bridge_loop_avoidance.h"
+#include "block_ogm.h"
 
 static void batadv_purge_orig(struct work_struct *work);
 
@@ -235,6 +236,7 @@ struct batadv_orig_node *batadv_get_orig_node(struct batadv_priv *bat_priv,
 	orig_node->batman_seqno_reset = reset_time;
 
 	atomic_set(&orig_node->bond_candidates, 0);
+	batadv_block_check_orig_entry(bat_priv, orig_node);
 
 	size = bat_priv->num_ifaces * sizeof(unsigned long) * BATADV_NUM_WORDS;
 

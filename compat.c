@@ -74,4 +74,12 @@ void batadv_free_rcu_dat_entry(struct rcu_head *rcu)
 }
 #endif
 
+void batadv_free_rcu_block_entry(struct rcu_head *rcu)
+{
+	struct block_entry *block_entry;
+
+	block_entry = container_of(rcu, struct block_entry, rcu);
+	kfree(block_entry);
+}
+
 #endif /* < KERNEL_VERSION(3, 0, 0) */
