@@ -46,7 +46,11 @@ static u32 batadv_get_link(struct net_device *dev);
 static void batadv_get_strings(struct net_device *dev, u32 stringset, u8 *data);
 static void batadv_get_ethtool_stats(struct net_device *dev,
 				     struct ethtool_stats *stats, u64 *data);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
+static int batadv_get_sset_count(struct net_device *dev);
+#else
 static int batadv_get_sset_count(struct net_device *dev, int stringset);
+#endif
 
 static const struct ethtool_ops batadv_ethtool_ops = {
 	.get_settings = batadv_get_settings,
@@ -363,7 +367,16 @@ static void batadv_interface_setup(struct net_device *dev)
 
 	ether_setup(dev);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29)
+	dev->open = batadv_netdev_ops.ndo_open;
+	dev->stop = batadv_netdev_ops.ndo_stop;
+	dev->get_stats = batadv_netdev_ops.ndo_get_stats;
+	dev->set_mac_address = batadv_netdev_ops.ndo_set_mac_address;
+	dev->change_mtu = batadv_netdev_ops.ndo_change_mtu;
+	dev->hard_start_xmit = batadv_netdev_ops.ndo_start_xmit;
+#else
 	dev->netdev_ops = &batadv_netdev_ops;
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29) */
 	dev->destructor = free_netdev;
 	dev->tx_queue_len = 0;
 
@@ -486,7 +499,11 @@ void batadv_softif_destroy(struct net_device *soft_iface)
 
 int batadv_softif_is_valid(const struct net_device *net_dev)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29)
+	if (net_dev->hard_start_xmit == batadv_interface_tx)
+#else
 	if (net_dev->netdev_ops->ndo_start_xmit == batadv_interface_tx)
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29) */
 		return 1;
 
 	return 0;
@@ -577,6 +594,12 @@ static void batadv_get_ethtool_stats(struct net_device *dev,
 		data[i] = batadv_sum_counter(bat_priv, i);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
+static int batadv_get_sset_count(struct net_device *dev)
+{
+	return ARRAY_SIZE(batadv_counters_strings);
+}
+#else
 static int batadv_get_sset_count(struct net_device *dev, int stringset)
 {
 	if (stringset == ETH_SS_STATS)
@@ -584,3 +607,4 @@ static int batadv_get_sset_count(struct net_device *dev, int stringset)
 
 	return -EOPNOTSUPP;
 }
+#endif
