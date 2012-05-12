@@ -29,6 +29,7 @@
 #include "originator.h"
 #include "network-coding.h"
 #include "fragmentation.h"
+#include "rlnc.h"
 
 static void batadv_send_outstanding_bcast_packet(struct work_struct *work);
 
@@ -66,7 +67,8 @@ int batadv_send_skb_packet(struct sk_buff *skb,
 	ethhdr->h_proto = htons(ETH_P_BATMAN);
 
 	skb_set_network_header(skb, ETH_HLEN);
-	skb->priority = TC_PRIO_CONTROL;
+	if (!skb->priority)
+		skb->priority = TC_PRIO_BULK;
 	skb->protocol = htons(ETH_P_BATMAN);
 
 	skb->dev = hard_iface->net_dev;
@@ -268,6 +270,9 @@ int batadv_send_skb_generic_unicast(struct batadv_priv *bat_priv,
 
 	switch (packet_type) {
 	case BATADV_UNICAST:
+		ret = batadv_rlnc_skb_add_plain(skb, orig_node);
+		if (ret != NET_XMIT_DROP)
+			goto out;
 		batadv_send_skb_prepare_unicast(skb, orig_node);
 		break;
 	case BATADV_UNICAST_4ADDR:
@@ -292,12 +297,12 @@ int batadv_send_skb_generic_unicast(struct batadv_priv *bat_priv,
 		unicast_packet->ttvn = unicast_packet->ttvn - 1;
 
 	if (batadv_send_skb_to_orig(skb, orig_node, NULL) != NET_XMIT_DROP)
-		ret = 0;
+		ret = NET_RX_SUCCESS;
 
 out:
 	if (orig_node)
 		batadv_orig_node_free_ref(orig_node);
-	if (ret == NET_RX_DROP)
+	if (ret != NET_RX_SUCCESS)
 		kfree_skb(skb);
 	return ret;
 }

@@ -167,6 +167,8 @@ enum batadv_uev_type {
 #include <net/rtnetlink.h>
 #include <linux/jiffies.h>
 #include <linux/seq_file.h>
+#include <linux/miscdevice.h>
+#include <linux/wait.h>
 #include "compat.h"
 
 #include "types.h"

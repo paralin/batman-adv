@@ -48,6 +48,13 @@ enum {
 	BATADV_HLP_A_TQ,
 	BATADV_HLP_A_HOP_LIST,
 	BATADV_HLP_A_RLY_LIST,
+	BATADV_HLP_A_FRAME,
+	BATADV_HLP_A_BLOCK,
+	BATADV_HLP_A_INT,
+	BATADV_HLP_A_TYPE,
+	BATADV_HLP_A_RANK,
+	BATADV_HLP_A_SEQ,
+	BATADV_HLP_A_ENCS,
 	BATADV_HLP_A_NUM,
 };
 #define BATADV_HLP_A_MAX (BATADV_HLP_A_NUM - 1)
@@ -72,6 +79,9 @@ enum {
 	BATADV_HLP_C_GET_RELAYS,
 	BATADV_HLP_C_GET_LINK,
 	BATADV_HLP_C_GET_ONE_HOP,
+	BATADV_HLP_C_FRAME,
+	BATADV_HLP_C_BLOCK,
+	BATADV_HLP_C_UNBLOCK,
 	BATADV_HLP_C_NUM,
 };
 #define BATADV_HLP_C_MAX (BATADV_HLP_C_NUM - 1)
@@ -299,6 +309,7 @@ struct batadv_gw_node {
  * @lq_update_lock: lock protecting tq_recv & tq_index
  * @refcount: number of contexts the object is used
  * @rcu: struct used for freeing in an RCU-safe manner
+ * @rlnc_entry: list node for batadv_orig_node::rlnc_list
  */
 struct batadv_neigh_node {
 	struct hlist_node list;
@@ -417,6 +428,19 @@ enum batadv_counters {
 	BATADV_CNT_NC_DECODE_BYTES,
 	BATADV_CNT_NC_DECODE_FAILED,
 	BATADV_CNT_NC_SNIFFED,
+#endif
+#ifdef CONFIG_BATMAN_ADV_RLNC
+	BATADV_CNT_RLNC_ENC_TX,
+	BATADV_CNT_RLNC_ENC_RX,
+	BATADV_CNT_RLNC_REC_TX,
+	BATADV_CNT_RLNC_REC_RX,
+	BATADV_CNT_RLNC_HLP_TX,
+	BATADV_CNT_RLNC_HLP_RX,
+	BATADV_CNT_RLNC_DEC_RX,
+	BATADV_CNT_RLNC_ACK_TX,
+	BATADV_CNT_RLNC_ACK_RX,
+	BATADV_CNT_RLNC_REQ_TX,
+	BATADV_CNT_RLNC_REQ_RX,
 #endif
 	BATADV_CNT_NUM,
 };
@@ -626,6 +650,7 @@ struct batadv_priv_nc {
  * @dat: distributed arp table data
  * @network_coding: bool indicating whether network coding is enabled
  * @batadv_priv_nc: network coding data
+ * @rlnc: private data for random linear network coding
  */
 struct batadv_priv {
 	atomic_t mesh_state;
@@ -685,7 +710,13 @@ struct batadv_priv {
 	struct sock *helper_nl_sock;
 	struct genl_family hlp_genl_family;
 	u32 genl_portid;
+	atomic_t hlp_block; /* int */
 #endif
+};
+
+struct batadv_rlnc_entry {
+	struct list_head list;
+	struct sk_buff *skb; /* Must be last */
 };
 
 /**
@@ -929,10 +960,12 @@ struct batadv_nc_packet {
  *  to batman-adv in the skb->cb buffer in skbs.
  * @decoded: Marks a skb as decoded, which is checked when searching for coding
  *  opportunities in network-coding.c
+ * @plain: Marks a skb as plain, which is checked before adding an skb to rlnc.
  */
 struct batadv_skb_cb {
 	struct batadv_priv *bat_priv;
 	bool decoded;
+	bool plain;
 };
 
 /**

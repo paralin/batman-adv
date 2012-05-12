@@ -151,7 +151,7 @@ static int batadv_interface_tx(struct sk_buff *skb,
 	static const uint8_t ectp_addr[ETH_ALEN] = {0xCF, 0x00, 0x00, 0x00,
 						    0x00, 0x00};
 	unsigned int header_len = 0;
-	int data_len = skb->len, ret;
+	int data_len = skb->len, ret = NETDEV_TX_OK;
 	unsigned short vid __maybe_unused = BATADV_NO_FLAGS;
 	bool do_bcast = false;
 	uint32_t seqno;
@@ -290,7 +290,11 @@ dropped_freed:
 end:
 	if (primary_if)
 		batadv_hardif_free_ref(primary_if);
-	return NETDEV_TX_OK;
+
+	if (ret == NET_XMIT_CN)
+		return ret;
+	else
+		return NETDEV_TX_OK;
 }
 
 void batadv_interface_rx(struct net_device *soft_iface,
@@ -781,6 +785,19 @@ static const struct {
 	{ "nc_decode_bytes" },
 	{ "nc_decode_failed" },
 	{ "nc_sniffed" },
+#endif
+#ifdef CONFIG_BATMAN_ADV_RLNC
+	{ "rlnc_enc_tx" },
+	{ "rlnc_enc_rx" },
+	{ "rlnc_rec_tx" },
+	{ "rlnc_rec_rx" },
+	{ "rlnc_hlp_tx" },
+	{ "rlnc_hlp_rx" },
+	{ "rlnc_dec_rx" },
+	{ "rlnc_ack_tx" },
+	{ "rlnc_ack_rx" },
+	{ "rlnc_req_tx" },
+	{ "rlnc_req_rx" },
 #endif
 };
 

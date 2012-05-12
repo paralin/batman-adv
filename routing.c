@@ -30,6 +30,7 @@
 #include "network-coding.h"
 #include "fragmentation.h"
 #include "helper.h"
+#include "rlnc.h"
 
 static int batadv_route_unicast_packet(struct sk_buff *skb,
 				       struct batadv_hard_iface *recv_if);
@@ -1157,3 +1158,78 @@ out:
 		batadv_orig_node_free_ref(orig_node);
 	return ret;
 }
+
+#ifdef CONFIG_BATMAN_ADV_RLNC
+int batadv_rlnc_recv_skb(struct sk_buff *skb,
+			 struct batadv_hard_iface *recv_if)
+{
+	struct batadv_priv *bat_priv = netdev_priv(recv_if->soft_iface);
+	struct batadv_rlnc_packet *pkt;
+	struct ethhdr *ethhdr = eth_hdr(skb);
+	int ret = NET_RX_DROP;
+
+	if (ACCESS_ONCE(bat_priv->genl_portid) == 0)
+		goto out;
+
+	if (skb_linearize(skb) < 0)
+		goto out;
+
+	pkt = (struct batadv_rlnc_packet *)skb->data;
+
+	switch (pkt->subtype) {
+	case BATADV_RLNC_ENC:
+		batadv_inc_counter(bat_priv, BATADV_CNT_RLNC_ENC_RX);
+		break;
+
+	case BATADV_RLNC_HLP:
+		batadv_inc_counter(bat_priv, BATADV_CNT_RLNC_HLP_RX);
+		break;
+
+	case BATADV_RLNC_REC:
+		batadv_inc_counter(bat_priv, BATADV_CNT_RLNC_REC_RX);
+		break;
+
+	case BATADV_RLNC_ACK:
+		batadv_inc_counter(bat_priv, BATADV_CNT_RLNC_ACK_RX);
+		break;
+
+	case BATADV_RLNC_REQ:
+		batadv_inc_counter(bat_priv, BATADV_CNT_RLNC_REQ_RX);
+		break;
+	}
+
+
+	switch (pkt->subtype) {
+	case BATADV_RLNC_RED:
+	case BATADV_RLNC_REC:
+	case BATADV_RLNC_HLP:
+	case BATADV_RLNC_ENC:
+		if (batadv_is_my_mac(bat_priv, ethhdr->h_dest) &&
+		    batadv_is_my_mac(bat_priv, pkt->dst))
+			batadv_rlnc_skb_add_enc(skb, bat_priv, pkt->subtype);
+		else if (batadv_is_my_mac(bat_priv, ethhdr->h_dest))
+			batadv_rlnc_skb_add_enc(skb, bat_priv, BATADV_RLNC_REC);
+		else if (pkt->subtype != BATADV_RLNC_HLP &&
+			 batadv_hlp_is_one_hop(bat_priv, ethhdr))
+			batadv_rlnc_skb_add_enc(skb, bat_priv, BATADV_RLNC_HLP);
+		else
+			break;
+
+		ret = NET_RX_SUCCESS;
+		break;
+
+	case BATADV_RLNC_ACK:
+		batadv_rlnc_skb_add_ack(bat_priv, skb);
+		ret = NET_RX_SUCCESS;
+		break;
+
+	case BATADV_RLNC_REQ:
+		batadv_rlnc_skb_add_req(bat_priv, skb);
+		ret = NET_RX_SUCCESS;
+		break;
+	}
+
+out:
+	return ret;
+}
+#endif /* CONFIG_BATMAN_ADV_RLNC */

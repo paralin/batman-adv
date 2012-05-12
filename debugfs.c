@@ -32,6 +32,7 @@
 #include "bridge_loop_avoidance.h"
 #include "distributed-arp-table.h"
 #include "network-coding.h"
+#include "rlnc.h"
 
 static struct dentry *batadv_debugfs;
 
@@ -440,6 +441,9 @@ int batadv_debugfs_add_meshif(struct net_device *dev)
 	if (batadv_nc_init_debugfs(bat_priv) < 0)
 		goto rem_attr;
 
+	if (batadv_rlnc_setup(bat_priv) < 0)
+		goto rem_attr;
+
 	return 0;
 rem_attr:
 	debugfs_remove_recursive(bat_priv->debug_dir);
@@ -457,6 +461,7 @@ void batadv_debugfs_del_meshif(struct net_device *dev)
 	struct batadv_priv *bat_priv = netdev_priv(dev);
 
 	batadv_debug_log_cleanup(bat_priv);
+	batadv_rlnc_cleanup(bat_priv);
 
 	if (batadv_debugfs) {
 		debugfs_remove_recursive(bat_priv->debug_dir);

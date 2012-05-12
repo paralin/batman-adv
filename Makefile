@@ -29,6 +29,8 @@ export CONFIG_BATMAN_ADV_DAT=y
 export CONFIG_BATMAN_ADV_NC=n
 # B.A.T.M.A.N. relay information:
 export CONFIG_BATMAN_ADV_HELPER=y
+# B.A.T.M.A.N. random linear network coding:
+export CONFIG_BATMAN_ADV_RLNC=y
 
 PWD:=$(shell pwd)
 KERNELPATH ?= /lib/modules/$(shell uname -r)/build

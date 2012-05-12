@@ -28,6 +28,7 @@
 #include "routing.h"
 #include "translation-table.h"
 #include "helper.h"
+#include "rlnc.h"
 
 static HLIST_HEAD(batadv_genl_portid_head);
 
@@ -420,7 +421,7 @@ int batadv_hlp_genl_register(struct sk_buff *skb, struct genl_info *info)
 	struct sk_buff *skb_out = NULL;
 	void *msg_head = NULL;
 	char *ifname;
-	int ret = 0;
+	int ret = 0, encoders;
 
 	if (!info->attrs[BATADV_HLP_A_IFNAME]) {
 		ret = -ENOENT;
@@ -440,6 +441,14 @@ int batadv_hlp_genl_register(struct sk_buff *skb, struct genl_info *info)
 		ret = -EACCES;
 		goto out;
 	}
+
+	if (!info->attrs[BATADV_HLP_A_ENCS]) {
+		ret = -ENOENT;
+		goto out;
+	}
+
+	encoders = nla_get_u32(info->attrs[BATADV_HLP_A_ENCS]);
+	atomic_set(&bat_priv->hlp_block, 0);
 
 	bat_priv->genl_portid = info->snd_portid;
 	batadv_hlp_tvlv_container_update(bat_priv, true);
@@ -762,6 +771,27 @@ static struct nla_policy batadv_hlp_genl_policy[BATADV_HLP_A_NUM] = {
 	[BATADV_HLP_A_RLY_LIST] = {
 		.type = NLA_NESTED,
 	},
+	[BATADV_HLP_A_FRAME] = {
+		.type = NLA_UNSPEC,
+	},
+	[BATADV_HLP_A_BLOCK] = {
+		.type = NLA_U16,
+	},
+	[BATADV_HLP_A_INT] = {
+		.type = NLA_U16,
+	},
+	[BATADV_HLP_A_TYPE] = {
+		.type = NLA_U8,
+	},
+	[BATADV_HLP_A_RANK] = {
+		.type = NLA_U16,
+	},
+	[BATADV_HLP_A_SEQ] = {
+		.type = NLA_U16,
+	},
+	[BATADV_HLP_A_ENCS] = {
+		.type = NLA_U32,
+	},
 };
 
 static struct genl_ops batadv_hlp_genl_ops[] = {
@@ -784,6 +814,18 @@ static struct genl_ops batadv_hlp_genl_ops[] = {
 		.cmd = BATADV_HLP_C_GET_ONE_HOP,
 		.policy = batadv_hlp_genl_policy,
 		.doit = batadv_hlp_genl_get_one_hop,
+	},
+	[BATADV_HLP_C_FRAME - 1] = {
+		.cmd = BATADV_HLP_C_FRAME,
+		.doit = batadv_rlnc_genl_frame,
+	},
+	[BATADV_HLP_C_BLOCK - 1] = {
+		.cmd = BATADV_HLP_C_BLOCK,
+		.doit = batadv_rlnc_genl_block,
+	},
+	[BATADV_HLP_C_UNBLOCK - 1] = {
+		.cmd = BATADV_HLP_C_UNBLOCK,
+		.doit = batadv_rlnc_genl_block,
 	},
 };
 

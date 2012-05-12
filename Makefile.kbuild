@@ -34,6 +34,7 @@ batman-adv-y += main.o
 batman-adv-$(CONFIG_BATMAN_ADV_NC) += network-coding.o
 batman-adv-y += originator.o
 batman-adv-$(CONFIG_BATMAN_ADV_HELPER) += helper.o
+batman-adv-$(CONFIG_BATMAN_ADV_RLNC) += rlnc.o
 batman-adv-y += routing.o
 batman-adv-y += send.o
 batman-adv-y += soft-interface.o

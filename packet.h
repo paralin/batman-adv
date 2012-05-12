@@ -46,6 +46,7 @@ enum batadv_packettype {
 	BATADV_UNICAST_4ADDR    = 0x42,
 	BATADV_ICMP             = 0x43,
 	BATADV_UNICAST_TVLV     = 0x44,
+	BATADV_RLNC		= 0x45,
 #define BATADV_UNICAST_MAX     0x7f
 	/* 0x80 - 0xff: reserved */
 };
@@ -145,6 +146,17 @@ enum batadv_tvlv_type {
 	BATADV_TVLV_TT		= 0x04,
 	BATADV_TVLV_ROAM	= 0x05,
 	BATADV_TVLV_HLP		= 0x06,
+};
+
+enum batadv_rlnc_types {
+	BATADV_RLNC_PLAIN = 0,
+	BATADV_RLNC_ENC = 1,
+	BATADV_RLNC_RED = 2,
+	BATADV_RLNC_DEC = 3,
+	BATADV_RLNC_REC = 4,
+ 	BATADV_RLNC_HLP = 5,
+	BATADV_RLNC_REQ = 6,
+	BATADV_RLNC_ACK = 7,
 };
 
 /* the destination hardware field in the ARP frame is used to
@@ -421,6 +433,25 @@ struct batadv_helper_info {
 	uint8_t addr[ETH_ALEN];
 	uint8_t tq_total;
 	uint8_t tq_second_hop;
+};
+
+struct batadv_rlnc_packet {
+	struct batadv_header header;
+	uint8_t subtype;
+	uint8_t dst[ETH_ALEN];
+	uint8_t src[ETH_ALEN];
+	uint16_t block_id;
+};
+
+struct batadv_rlnc_req_packet {
+	struct batadv_rlnc_packet rlnc;
+	uint16_t rank;
+	uint16_t seq;
+};
+
+struct batadv_rlnc_ack_packet {
+	struct batadv_rlnc_packet rlnc;
+	uint16_t interval;
 };
 
 #endif /* _NET_BATMAN_ADV_PACKET_H_ */
