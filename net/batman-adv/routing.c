@@ -45,6 +45,7 @@
 #include "packet.h"
 #include "send.h"
 #include "soft-interface.h"
+#include "tp_meter.h"
 #include "translation-table.h"
 
 static int batadv_route_unicast_packet(struct sk_buff *skb,
@@ -233,7 +234,6 @@ static int batadv_recv_my_icmp_packet(struct batadv_priv *bat_priv,
 		/* receive the packet */
 		if (skb_linearize(skb) < 0)
 			break;
-
 		batadv_socket_receive_packet(icmph, skb->len);
 		break;
 	case BATADV_ECHO_REQUEST:
@@ -266,6 +266,13 @@ static int batadv_recv_my_icmp_packet(struct batadv_priv *bat_priv,
 			ret = NET_RX_SUCCESS;
 
 		break;
+	case BATADV_TP:
+		if (!pskb_may_pull(skb, sizeof(struct batadv_icmp_tp_packet)))
+			goto out;
+
+		batadv_tp_meter_recv(bat_priv, skb);
+		ret = NET_RX_SUCCESS;
+		goto out;
 	default:
 		/* drop unknown type */
 		goto out;
