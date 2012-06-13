@@ -27,6 +27,7 @@
 #include "distributed-arp-table.h"
 #include "network-coding.h"
 #include "fragmentation.h"
+#include "bw_meter.h"
 
 #include <linux/if_vlan.h>
 
@@ -202,7 +203,6 @@ static int batadv_recv_my_icmp_packet(struct batadv_priv *bat_priv,
 		/* receive the packet */
 		if (skb_linearize(skb) < 0)
 			break;
-
 		batadv_socket_receive_packet(icmph, skb->len);
 		break;
 	case BATADV_ECHO_REQUEST:
@@ -232,6 +232,13 @@ static int batadv_recv_my_icmp_packet(struct batadv_priv *bat_priv,
 			ret = NET_RX_SUCCESS;
 
 		break;
+	case BATADV_BW:
+		if (!pskb_may_pull(skb, sizeof(struct batadv_icmp_bw_packet)))
+			goto out;
+
+		batadv_bw_meter_recv(bat_priv, skb);
+		ret = NET_RX_SUCCESS;
+		goto out;
 	default:
 		/* drop unknown type */
 		goto out;

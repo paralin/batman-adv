@@ -18,6 +18,8 @@
 #ifndef _NET_BATMAN_ADV_PACKET_H_
 #define _NET_BATMAN_ADV_PACKET_H_
 
+#define batadv_bw_is_error(n) ((uint8_t)n > 127 ? 1 : 0)
+
 /**
  * enum batadv_packettype - types for batman-adv encapsulated packets
  * @BATADV_IV_OGM: originator messages for B.A.T.M.A.N. IV
@@ -81,13 +83,35 @@ enum batadv_iv_flags {
 };
 
 /* ICMP message types */
-enum batadv_icmp_packettype {
-	BATADV_ECHO_REPLY	       = 0,
-	BATADV_DESTINATION_UNREACHABLE = 3,
-	BATADV_ECHO_REQUEST	       = 8,
-	BATADV_TTL_EXCEEDED	       = 11,
-	BATADV_PARAMETER_PROBLEM       = 12,
+enum icmp_packettype {
+	BATADV_ECHO_REPLY		= 0,
+	BATADV_DESTINATION_UNREACHABLE	= 3,
+	BATADV_ECHO_REQUEST		= 8,
+	BATADV_TTL_EXCEEDED		= 11,
+	BATADV_PARAMETER_PROBLEM	= 12,
+	BATADV_BW			= 15,
 };
+
+/* vis defines */
+enum batadv_vis_packettype {
+	BATADV_VIS_TYPE_SERVER_SYNC   = 0,
+	BATADV_VIS_TYPE_CLIENT_UPDATE = 1,
+};
+
+/* fragmentation defines */
+enum batadv_unicast_frag_flags {
+	BATADV_UNI_FRAG_HEAD	  = BIT(0),
+	BATADV_UNI_FRAG_LARGETAIL = BIT(1),
+};
+
+enum batadv_icmp_user_cmd_type {
+	BATADV_BW_START		= 0,
+	BATADV_BW_STOP		= 2,
+};
+
+
+/* TT_QUERY subtypes */
+#define BATADV_TT_QUERY_TYPE_MASK 0x3
 
 /* tt data subtypes */
 #define BATADV_TT_DATA_TYPE_MASK 0x0F
@@ -255,16 +279,40 @@ struct batadv_icmp_packet {
 	__be16   seqno;
 };
 
+enum batadv_icmp_bw_subtype {
+	BATADV_BW_MSG	= 0,
+	BATADV_BW_ACK,
+};
+
 /**
  * struct batadv_icmp_bw_packet - ICMP BW Meter packet
- * @ih: common ICMP header
+ * @packet_type: batman-adv packet type, part of the general header
+ * @version: batman-adv protocol version, part of the genereal header
+ * @ttl: time to live for this packet, part of the genereal header
+ * @msg_type: ICMP packet type
+ * @dst: address of the destination node
+ * @orig: address of the source node
+ * @uid: local ICMP socket identifier
+ * @subtype: BW packet subtype
  * @reserved: not used - useful for alignment
  * @seqno: the BW sequence number
+ * @timestamp: time when the packet has been sent. This value is filled in a
+ *  BW_MSG and echoed back in the next BW_ACK so that the sender can compute the
+ *  RTT. Since it is read only by the host which wrote it, there is no need to
+ *  store it using network order
  */
 struct batadv_icmp_bw_packet {
-	struct batadv_icmp_header ih;
-	uint8_t reserved;
-	__be32 seqno;
+	uint8_t  packet_type;
+	uint8_t  version;
+	uint8_t  ttl;
+	uint8_t  msg_type; /* see ICMP message types above */
+	uint8_t  dst[ETH_ALEN];
+	uint8_t  orig[ETH_ALEN];
+	uint8_t  uid;
+	uint8_t  subtype;
+	uint8_t  reserved[2];
+	__be32   seqno;
+	uint32_t timestamp;
 };
 
 #define BATADV_RR_LEN 16
@@ -308,6 +356,35 @@ struct batadv_icmp_packet_rr {
  * leakage of information when the padding it not initialized before sending.
  */
 #pragma pack(2)
+
+enum batadv_bw_meter_status {
+	BATADV_BW_RECEIVER		= 1,
+	BATADV_BW_SENDER		= 2,
+	BATADV_BW_COMPLETE		= 3,
+	BATADV_BW_SIGINT		= 4,
+	/* error status >= 128 */
+	BATADV_BW_DST_UNREACHABLE	= 128,
+	BATADV_BW_RESEND_LIMIT		= 129,
+	BATADV_BW_ALREADY_ONGOING	= 130,
+	BATADV_BW_MEMORY_ERROR		= 131,
+	BATADV_BW_CANT_SEND		= 132,
+	BATADV_BW_TOO_MANY		= 133,
+};
+
+/* structure returned to batctl */
+struct batadv_icmp_bw_result_packet {
+	uint8_t  packet_type;
+	uint8_t  version;
+	uint8_t  ttl;
+	uint8_t  msg_type; /* see ICMP message types above */
+	uint8_t  dst[ETH_ALEN];
+	uint8_t  orig[ETH_ALEN];
+	uint8_t  uid;
+	uint8_t  reserved[2];
+	uint8_t  return_value;
+	uint32_t test_time;
+	uint32_t total_bytes;
+};
 
 /**
  * struct batadv_unicast_packet - unicast packet for network payload

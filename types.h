@@ -637,6 +637,86 @@ struct batadv_priv_nc {
 };
 
 /**
+ * struct batadv_bw_unacked - unacked packet meta-information
+ * @seqno: seqno of the unacked packet
+ * @len: length of the packet
+ * @list: list node for batadv_bw_vars::unacked_list
+ *
+ * This struct is supposed to represent a buffer unacked packet. However, since
+ * the purpose of the BW meter is to count the traffic only, there is no need to
+ * store the entire sk_buff, the starting offset and the length are enough
+ */
+struct batadv_bw_unacked {
+	uint32_t seqno;
+	uint16_t len;
+	struct list_head list;
+};
+
+/**
+ * struct batadv_bw_vars - bw meter private variables per session
+ * @sending: sending binary semaphore: 1 if sending, 0 is not
+ * @finish_work: work item for the finishing procedure
+ * @dec_cwnd: decimal part of the cwnd used during linear growth
+ * @cwnd: current size of the congestion window
+ * @ss_threshold: Slow Start threshold. Once cwnd exceeds this value the
+ *  connection switches to the Congestion Avoidance state
+ * @last_acked: last acked byte
+ * @last_dup: last duplicated ACKed sequence number
+ * @last_sent: last sent byte, not yet acked
+ * @tot_sent: amount of data sent/ACKed so far
+ * @dup_acks: duplicate ACKs counter
+ * @fast_recovery: true if in Fast Recovery mode
+ * @recover: last sent seqno when entering Fast Recovery
+ * @rto: sender timeout
+ * @srtt: smoothed RTT scaled by 2^3
+ * @rttvar: RTT variation scaled by 2^2
+ * @last_recv: last in-order received packet
+ * @unacked_list: list of unacked packets (meta-info only)
+ * @unacked_lock: protect unacked_list
+ * @refcount: number of context where the object is used
+ * @rcu: struct used for freeing in an RCU-safe manner
+ */
+struct batadv_bw_vars {
+	struct hlist_node list;
+	struct timer_list timer;
+	struct batadv_priv *bat_priv;
+	struct batadv_socket_client *socket_client;
+	unsigned long start_time;
+	uint8_t other_end[ETH_ALEN];
+	uint8_t status;			/* see bm_meter_status */
+	atomic_t sending;
+	int reason;
+	struct delayed_work finish_work;
+	struct work_struct start_work;
+	uint32_t test_length;
+
+	/* sender variables */
+	uint16_t dec_cwnd;
+	uint32_t cwnd;
+	spinlock_t cwnd_lock;
+	uint32_t ss_threshold;
+	atomic_t last_acked;
+	uint32_t last_sent;
+	atomic_t tot_sent;
+	atomic_t dup_acks;
+	bool fast_recovery;
+	uint32_t recover;
+	uint32_t rto;
+	uint32_t srtt;
+	uint32_t rttvar;
+	wait_queue_head_t more_bytes;
+	struct completion done;
+
+	/* receiver variables */
+	uint32_t last_recv;
+	struct list_head unacked_list;
+	spinlock_t unacked_lock;
+	unsigned long last_recv_time;
+	atomic_t refcount;
+	struct rcu_head rcu;
+};
+
+/*
  * struct batadv_softif_vlan - per VLAN attributes set
  * @vid: VLAN identifier
  * @kobj: kobject for sysfs vlan subdirectory
@@ -685,6 +765,7 @@ struct batadv_softif_vlan {
  * @debug_dir: dentry for debugfs batman-adv subdirectory
  * @forw_bat_list: list of aggregated OGMs that will be forwarded
  * @forw_bcast_list: list of broadcast packets that will be rebroadcasted
+ * @bw_num: number of currently active bw sessions
  * @orig_hash: hash table containing mesh participants (orig nodes)
  * @forw_bat_list_lock: lock protecting forw_bat_list
  * @forw_bcast_list_lock: lock protecting forw_bcast_list
@@ -738,9 +819,12 @@ struct batadv_priv {
 	struct dentry *debug_dir;
 	struct hlist_head forw_bat_list;
 	struct hlist_head forw_bcast_list;
+	struct hlist_head bw_list;
 	struct batadv_hashtable *orig_hash;
 	spinlock_t forw_bat_list_lock; /* protects forw_bat_list */
 	spinlock_t forw_bcast_list_lock; /* protects forw_bcast_list */
+	spinlock_t bw_list_lock; /* protects bw_list */
+	atomic_t bw_num;
 	struct delayed_work orig_work;
 	struct work_struct cleanup_work;
 	struct batadv_hard_iface __rcu *primary_if;  /* rcu protected pointer */

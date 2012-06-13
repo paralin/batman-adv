@@ -56,6 +56,8 @@ struct workqueue_struct *batadv_event_workqueue;
 
 static void batadv_recv_handler_init(void);
 
+static struct lock_class_key batadv_bw_list_lock_class_key;
+
 static int __init batadv_init(void)
 {
 	INIT_LIST_HEAD(&batadv_hardif_list);
@@ -113,6 +115,7 @@ int batadv_mesh_init(struct net_device *soft_iface)
 	spin_lock_init(&bat_priv->tvlv.container_list_lock);
 	spin_lock_init(&bat_priv->tvlv.handler_list_lock);
 	spin_lock_init(&bat_priv->softif_vlan_list_lock);
+	spin_lock_init(&bat_priv->bw_list_lock);
 
 	INIT_HLIST_HEAD(&bat_priv->forw_bat_list);
 	INIT_HLIST_HEAD(&bat_priv->forw_bcast_list);
@@ -123,6 +126,10 @@ int batadv_mesh_init(struct net_device *soft_iface)
 	INIT_HLIST_HEAD(&bat_priv->tvlv.container_list);
 	INIT_HLIST_HEAD(&bat_priv->tvlv.handler_list);
 	INIT_HLIST_HEAD(&bat_priv->softif_vlan_list);
+	INIT_HLIST_HEAD(&bat_priv->bw_list);
+
+	lockdep_set_class(&bat_priv->bw_list_lock,
+			  &batadv_bw_list_lock_class_key);
 
 	ret = batadv_originator_init(bat_priv);
 	if (ret < 0)

@@ -18,11 +18,13 @@
 #include "main.h"
 #include <linux/debugfs.h>
 #include <linux/slab.h>
+
 #include "icmp_socket.h"
 #include "send.h"
 #include "hash.h"
 #include "originator.h"
 #include "hard-interface.h"
+#include "bw_meter.h"
 
 static struct batadv_socket_client *batadv_socket_client_hash[256];
 
@@ -159,7 +161,6 @@ static ssize_t batadv_socket_write(struct file *file, const char __user *buff,
 	size_t packet_len;
 
 	primary_if = batadv_primary_if_get_selected(bat_priv);
-
 	if (!primary_if) {
 		len = -EFAULT;
 		goto out;
@@ -173,9 +174,19 @@ static ssize_t batadv_socket_write(struct file *file, const char __user *buff,
 		goto out;
 	}
 
-	/* no command supported yet! */
-	len = -EINVAL;
-	goto out;
+	switch (icmp_user_packet.cmd_type) {
+	case BATADV_BW_START:
+		batadv_bw_start(socket_client, icmp_user_packet.dst,
+				icmp_user_packet.arg1);
+		goto out;
+	case BATADV_BW_STOP:
+		batadv_bw_stop(bat_priv, icmp_user_packet.dst,
+			       BATADV_BW_SIGINT);
+		goto out;
+	default:
+		len = -EINVAL;
+		goto out;
+	}
 
 userspace_packet:
 
@@ -197,6 +208,8 @@ userspace_packet:
 		len = -ENOMEM;
 		goto out;
 	}
+
+	icmp_packet.uid = socket_client->index;
 
 	skb->priority = TC_PRIO_CONTROL;
 	skb_reserve(skb, ETH_HLEN);
