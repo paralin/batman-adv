@@ -39,4 +39,5 @@ batman-adv-y += routing.o
 batman-adv-y += send.o
 batman-adv-y += soft-interface.o
 batman-adv-y += sysfs.o
+batman-adv-y += tp_meter.o
 batman-adv-y += translation-table.o

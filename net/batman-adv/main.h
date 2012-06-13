@@ -101,6 +101,9 @@
 #define BATADV_NUM_BCASTS_WIRELESS 3
 #define BATADV_NUM_BCASTS_MAX 3
 
+/* length of the single packet used by the TP meter */
+#define BATADV_TP_PACKET_LEN ETH_DATA_LEN
+
 /* msecs after which an ARP_REQUEST is sent in broadcast as fallback */
 #define ARP_REQ_DELAY 250
 /* numbers of originator to contact for any PUT/GET DHT operation */
@@ -131,6 +134,11 @@
 #define BATADV_EXPECTED_SEQNO_RANGE	65536
 
 #define BATADV_NC_NODE_TIMEOUT 10000 /* Milliseconds */
+
+/**
+ * BATADV_TP_MAX_NUM - maximum number of simultaneously active tp sessions
+ */
+#define BATADV_TP_MAX_NUM 5
 
 enum batadv_mesh_state {
 	BATADV_MESH_INACTIVE,
@@ -232,16 +240,18 @@ __be32 batadv_skb_crc32(struct sk_buff *skb, u8 *payload_ptr);
  * @BATADV_DBG_BLA: bridge loop avoidance messages
  * @BATADV_DBG_DAT: ARP snooping and DAT related messages
  * @BATADV_DBG_NC: network coding related messages
+ * @BATADV_DBG_TP_METER: throughput meter messages
  * @BATADV_DBG_ALL: the union of all the above log levels
  */
 enum batadv_dbg_level {
-	BATADV_DBG_BATMAN = BIT(0),
-	BATADV_DBG_ROUTES = BIT(1),
-	BATADV_DBG_TT	  = BIT(2),
-	BATADV_DBG_BLA    = BIT(3),
-	BATADV_DBG_DAT    = BIT(4),
-	BATADV_DBG_NC	  = BIT(5),
-	BATADV_DBG_ALL    = 63,
+	BATADV_DBG_BATMAN	= BIT(0),
+	BATADV_DBG_ROUTES	= BIT(1),
+	BATADV_DBG_TT		= BIT(2),
+	BATADV_DBG_BLA		= BIT(3),
+	BATADV_DBG_DAT		= BIT(4),
+	BATADV_DBG_NC		= BIT(5),
+	BATADV_DBG_TP_METER	= BIT(6),
+	BATADV_DBG_ALL		= 127,
 };
 
 #ifdef CONFIG_BATMAN_ADV_DEBUG

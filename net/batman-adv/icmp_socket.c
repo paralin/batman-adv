@@ -48,6 +48,7 @@
 #include "originator.h"
 #include "packet.h"
 #include "send.h"
+#include "tp_meter.h"
 
 static struct batadv_socket_client *batadv_socket_client_hash[256];
 
@@ -57,6 +58,7 @@ static void batadv_socket_add_packet(struct batadv_socket_client *socket_client,
 void batadv_socket_init(void)
 {
 	memset(batadv_socket_client_hash, 0, sizeof(batadv_socket_client_hash));
+	batadv_tp_meter_init();
 }
 
 static int batadv_socket_open(struct inode *inode, struct file *file)
@@ -187,8 +189,19 @@ batadv_socket_write_user(struct batadv_priv *bat_priv,
 	if (copy_from_user(&icmp_user_packet, buff, len))
 		return -EFAULT;
 
-	/* no command supported yet! */
-	len = -EINVAL;
+	switch (icmp_user_packet.cmd_type) {
+	case BATADV_TP_START:
+		batadv_tp_start(socket_client, icmp_user_packet.dst,
+				icmp_user_packet.arg1);
+		break;
+	case BATADV_TP_STOP:
+		batadv_tp_stop(bat_priv, icmp_user_packet.dst,
+			       BATADV_TP_SIGINT);
+		break;
+	default:
+		len = -EINVAL;
+		break;
+	}
 
 	return len;
 }
