@@ -226,6 +226,24 @@ struct batadv_priv_vis {
 	struct batadv_vis_info *my_info;
 };
 
+enum bw_meter_status {
+	INACTIVE,
+	RECEIVER,
+	SENDER,
+};
+
+struct bw_vars {
+	/* total data to send OR window data received */
+	uint32_t total_to_send;
+	/* offset of the first window packet */
+	uint32_t window_first;
+	uint32_t next_to_send;
+	unsigned long start_time;
+	unsigned long last_sent_time;
+	uint8_t other_end[ETH_ALEN];
+	uint8_t status; /* see bm_meter_status */
+};
+
 struct batadv_priv {
 	atomic_t mesh_state;
 	struct net_device_stats stats;
@@ -263,6 +281,9 @@ struct batadv_priv {
 	struct batadv_priv_gw gw;
 	struct batadv_priv_tt tt;
 	struct batadv_priv_vis vis;
+
+	struct delayed_work bw_work;
+	struct bw_vars *bw_vars;
 };
 
 struct batadv_socket_client {

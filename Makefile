@@ -20,7 +20,7 @@
 
 # changing the CONFIG_* line to 'y' enables the related feature
 # B.A.T.M.A.N. debugging:
-export CONFIG_BATMAN_ADV_DEBUG=n
+export CONFIG_BATMAN_ADV_DEBUG=y
 # B.A.T.M.A.N. bridge loop avoidance:
 export CONFIG_BATMAN_ADV_BLA=y
 
