@@ -44,12 +44,13 @@ enum batadv_iv_flags {
 };
 
 /* ICMP message types */
-enum batadv_icmp_packettype {
-	BATADV_ECHO_REPLY	       = 0,
-	BATADV_DESTINATION_UNREACHABLE = 3,
-	BATADV_ECHO_REQUEST	       = 8,
-	BATADV_TTL_EXCEEDED	       = 11,
-	BATADV_PARAMETER_PROBLEM       = 12,
+enum icmp_packettype {
+	ECHO_REPLY		= 0,
+	DESTINATION_UNREACHABLE = 3,
+	ECHO_REQUEST		= 8,
+	TTL_EXCEEDED		= 11,
+	PARAMETER_PROBLEM	= 12,
+	BW_METER 		= 15, 
 };
 
 /* vis defines */
@@ -154,8 +155,22 @@ struct batadv_icmp_packet_rr {
 	uint8_t  rr[BATADV_RR_LEN][ETH_ALEN];
 } __packed;
 
-struct batadv_unicast_packet {
-	struct batadv_header header;
+/* icmp_packet_bw must start with all fields from imcp_packet
+ * as this is assumed by code that handles ICMP packets
+ */
+struct icmp_packet_bw {
+	struct batman_header header;
+	uint8_t  msg_type; /* see ICMP message types above */
+	uint8_t  dst[ETH_ALEN];
+	uint8_t  orig[ETH_ALEN];
+	__be16   seqno;
+	uint8_t  uid;
+	uint8_t  reserved;
+	uint16_t  bw_parameter;
+} __packed;
+
+struct unicast_packet {
+	struct batman_header header;
 	uint8_t  ttvn; /* destination translation table version number */
 	uint8_t  dest[ETH_ALEN];
 } __packed;

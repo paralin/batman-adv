@@ -20,6 +20,7 @@
 #include "main.h"
 #include <linux/debugfs.h>
 #include <linux/slab.h>
+
 #include "icmp_socket.h"
 #include "send.h"
 #include "hash.h"
@@ -151,7 +152,8 @@ static ssize_t batadv_socket_write(struct file *file, const char __user *buff,
 	struct batadv_priv *bat_priv = socket_client->bat_priv;
 	struct batadv_hard_iface *primary_if = NULL;
 	struct sk_buff *skb;
-	struct batadv_icmp_packet_rr *icmp_packet;
+	struct icmp_packet_rr *icmp_packet;
+	struct icmp_packet_bw icmp_packet_bw;
 
 	struct batadv_orig_node *orig_node = NULL;
 	struct batadv_neigh_node *neigh_node = NULL;
