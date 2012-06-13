@@ -21,6 +21,7 @@
 #define _NET_BATMAN_ADV_PACKET_H_
 
 #define BATADV_ETH_P_BATMAN  0x4305 /* unofficial/not registered Ethertype */
+#define batadv_bw_is_error(n) ((uint8_t)n > 127 ? 1 : 0)
 
 enum batadv_packettype {
 	BATADV_IV_OGM	    = 0x01,
@@ -44,12 +45,15 @@ enum batadv_iv_flags {
 };
 
 /* ICMP message types */
-enum batadv_icmp_packettype {
-	BATADV_ECHO_REPLY	       = 0,
+enum icmp_packettype {
+	BATADV_ECHO_REPLY		= 0,
 	BATADV_DESTINATION_UNREACHABLE = 3,
-	BATADV_ECHO_REQUEST	       = 8,
-	BATADV_TTL_EXCEEDED	       = 11,
-	BATADV_PARAMETER_PROBLEM       = 12,
+	BATADV_ECHO_REQUEST		= 8,
+	BATADV_TTL_EXCEEDED		= 11,
+	BATADV_PARAMETER_PROBLEM	= 12,
+	BATADV_BW_START			= 15,
+	BATADV_BW_ACK			= 16,
+	BATADV_BW_STOP			= 17,
 };
 
 /* vis defines */
@@ -153,6 +157,30 @@ struct batadv_icmp_packet_rr {
 	uint8_t  uid;
 	uint8_t  rr_cur;
 	uint8_t  rr[BATADV_RR_LEN][ETH_ALEN];
+} __packed;
+
+enum batadv_bw_meter_status {
+	BATADV_BW_RECEIVER		= 1,
+	BATADV_BW_SENDER		= 2,
+	BATADV_BW_COMPLETE		= 3,
+	BATADV_BW_LAST_WINDOW		= 4,
+	/* error status >= 128 */
+	BATADV_BW_SIGINT		= 128,
+	BATADV_BW_DST_UNREACHABLE	= 129,
+	BATADV_BW_RESEND_LIMIT		= 130,
+	BATADV_BW_ALREADY_ONGOING	= 131,
+	BATADV_BW_MEMORY_ERROR		= 132,
+};
+
+/* structure returned to batctl */
+/* icmp_packet_rr used to keep socket_client's index,
+ * as function batadv_socket_receive_packet expects it
+ */
+struct batadv_bw_result {
+	struct batadv_icmp_packet icmp_packet;
+	uint32_t test_time;
+	uint32_t total_bytes;
+	uint8_t return_value;
 } __packed;
 
 struct batadv_unicast_packet {
