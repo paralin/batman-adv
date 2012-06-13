@@ -20,11 +20,13 @@
 #include "main.h"
 #include <linux/debugfs.h>
 #include <linux/slab.h>
+
 #include "icmp_socket.h"
 #include "send.h"
 #include "hash.h"
 #include "originator.h"
 #include "hard-interface.h"
+#include "bw_meter.h"
 
 static struct batadv_socket_client *batadv_socket_client_hash[256];
 
@@ -152,6 +154,7 @@ static ssize_t batadv_socket_write(struct file *file, const char __user *buff,
 	struct batadv_hard_iface *primary_if = NULL;
 	struct sk_buff *skb;
 	struct batadv_icmp_packet_rr *icmp_packet;
+	struct batadv_icmp_packet icmp_packet_bw;
 
 	struct batadv_orig_node *orig_node = NULL;
 	struct batadv_neigh_node *neigh_node = NULL;
@@ -167,6 +170,21 @@ static ssize_t batadv_socket_write(struct file *file, const char __user *buff,
 
 	if (!primary_if) {
 		len = -EFAULT;
+		goto out;
+	}
+
+	if (copy_from_user(&icmp_packet_bw, buff, sizeof(icmp_packet_bw))) {
+		len = -EFAULT;
+		goto out;
+	}
+
+	if (icmp_packet_bw.msg_type == BATADV_BW_START) {
+		batadv_bw_start(socket_client, &icmp_packet_bw);
+		goto out;
+	}
+
+	if (icmp_packet_bw.msg_type == BATADV_BW_STOP) {
+		batadv_bw_stop(bat_priv, &icmp_packet_bw);
 		goto out;
 	}
 

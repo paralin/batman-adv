@@ -44,12 +44,15 @@ enum batadv_iv_flags {
 };
 
 /* ICMP message types */
-enum batadv_icmp_packettype {
-	BATADV_ECHO_REPLY	       = 0,
+enum icmp_packettype {
+	BATADV_ECHO_REPLY		= 0,
 	BATADV_DESTINATION_UNREACHABLE = 3,
-	BATADV_ECHO_REQUEST	       = 8,
-	BATADV_TTL_EXCEEDED	       = 11,
-	BATADV_PARAMETER_PROBLEM       = 12,
+	BATADV_ECHO_REQUEST		= 8,
+	BATADV_TTL_EXCEEDED		= 11,
+	BATADV_PARAMETER_PROBLEM	= 12,
+	BATADV_BW_START			= 15,
+	BATADV_BW_ACK			= 16,
+	BATADV_BW_STOP			= 17,
 };
 
 /* vis defines */
@@ -154,6 +157,15 @@ struct batadv_icmp_packet_rr {
 	uint8_t  rr_cur;
 	uint8_t  rr[BATADV_RR_LEN][ETH_ALEN];
 } __packed;
+
+/* structure returned to batctl */
+/* icmp_packet_rr used to keep socket_client's index,
+ * as function batadv_socket_receive_packet expects it
+ */
+struct batadv_bw_result {
+	unsigned long int test_time;
+	unsigned long int total_bytes;
+};
 
 struct batadv_unicast_packet {
 	struct batadv_header header;

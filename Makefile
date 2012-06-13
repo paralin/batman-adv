@@ -22,7 +22,7 @@
 # B.A.T.M.A.N. debugging:
 export CONFIG_BATMAN_ADV_DEBUG=n
 # B.A.T.M.A.N. bridge loop avoidance:
-export CONFIG_BATMAN_ADV_BLA=y
+export CONFIG_BATMAN_ADV_BLA=n
 
 PWD:=$(shell pwd)
 KERNELPATH ?= /lib/modules/$(shell uname -r)/build

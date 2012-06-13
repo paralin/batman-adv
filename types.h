@@ -226,6 +226,37 @@ struct batadv_priv_vis {
 	struct batadv_vis_info *my_info;
 };
 
+enum bw_meter_status {
+	RECEIVER,
+	SENDER,
+	ABORTING,
+	COMPLETED,
+};
+
+struct batadv_bw_vars {
+	struct list_head list;
+	struct delayed_work bw_work;
+	struct batadv_priv *bat_priv;
+	struct batadv_socket_client *socket_client;
+	/* lock used in receiver */
+	spinlock_t bw_vars_lock;
+	/* locks used in sender */
+	spinlock_t bw_window_first_lock;
+	/* protects multiple_send calls */
+	spinlock_t bw_send_lock;
+	/* total data to send OR window data received */
+	uint32_t total_to_send;
+	/* offset of the first window packet */
+	uint16_t next_to_send;
+	uint32_t window_first;
+	uint8_t other_end[ETH_ALEN];
+	uint8_t status; /* see bm_meter_status */
+	unsigned long start_time;
+	unsigned long last_sent_time;
+	uint8_t retry_number;
+	uint16_t last_resent_window;
+};
+
 struct batadv_priv {
 	atomic_t mesh_state;
 	struct net_device_stats stats;
@@ -251,18 +282,25 @@ struct batadv_priv {
 	struct dentry *debug_dir;
 	struct hlist_head forw_bat_list;
 	struct hlist_head forw_bcast_list;
+
+	struct list_head bw_list;
 	struct batadv_hashtable *orig_hash;
 	spinlock_t forw_bat_list_lock; /* protects forw_bat_list */
 	spinlock_t forw_bcast_list_lock; /* protects  */
 	struct delayed_work orig_work;
 	struct batadv_hard_iface __rcu *primary_if;  /* rcu protected pointer */
 	struct batadv_algo_ops *bat_algo_ops;
+
 #ifdef CONFIG_BATMAN_ADV_BLA
 	struct batadv_priv_bla bla;
 #endif
 	struct batadv_priv_gw gw;
 	struct batadv_priv_tt tt;
 	struct batadv_priv_vis vis;
+
+	struct delayed_work bw_work;
+	struct batadv_bw_vars *bw_vars;
+	spinlock_t bw_list_lock;	/* protects bw_list */
 };
 
 struct batadv_socket_client {
