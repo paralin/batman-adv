@@ -28,6 +28,7 @@
 #include "vis.h"
 #include "unicast.h"
 #include "bridge_loop_avoidance.h"
+#include "bw_meter.h"
 
 static int batadv_route_unicast_packet(struct sk_buff *skb,
 				       struct batadv_hard_iface *recv_if);
@@ -289,6 +290,16 @@ static int batadv_recv_my_icmp_packet(struct batadv_priv *bat_priv,
 	int ret = NET_RX_DROP;
 
 	icmp_packet = (struct batadv_icmp_packet_rr *)skb->data;
+
+	if (icmp_packet->msg_type == BW_METER) {
+		batadv_bw_meter_received(bat_priv, skb);
+		goto out;
+	}
+
+	if (icmp_packet->msg_type == BW_ACK) {
+		batadv_bw_ack_received(bat_priv, skb);
+		goto out;
+	}
 
 	/* add data to device queue */
 	if (icmp_packet->msg_type != BATADV_ECHO_REQUEST) {

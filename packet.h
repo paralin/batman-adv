@@ -51,6 +51,7 @@ enum icmp_packettype {
 	TTL_EXCEEDED		= 11,
 	PARAMETER_PROBLEM	= 12,
 	BW_METER 		= 15, 
+	BW_ACK	 		= 16,
 };
 
 /* vis defines */
@@ -166,7 +167,8 @@ struct icmp_packet_bw {
 	__be16   seqno;
 	uint8_t  uid;
 	uint8_t  reserved;
-	uint16_t  bw_parameter;
+	uint32_t offset;
+	uint32_t wsize; 
 } __packed;
 
 struct unicast_packet {

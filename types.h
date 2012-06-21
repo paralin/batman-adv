@@ -164,7 +164,29 @@ enum batadv_counters {
 	BATADV_CNT_NUM,
 };
 
+<<<<<<< HEAD
 struct batadv_priv {
+=======
+enum bw_meter_status {
+	INACTIVE,
+	RECEIVER,
+	SENDER,
+};
+
+struct bw_meter_vars {
+	/*total data to send OR window data received*/
+	uint32_t to_send; 
+	/*offset of the first window packet*/
+	uint32_t first;
+	/*window size*/
+	uint32_t wsize;
+	struct icmp_packet_bw *icmp_packet_bw;
+	uint8_t other_end[ETH_ALEN];
+	uint8_t status; /*see bm_meter_status*/
+};
+
+struct bat_priv {
+>>>>>>> bw_meter and relative struct first skeletron
 	atomic_t mesh_state;
 	struct net_device_stats stats;
 	uint64_t __percpu *bat_counters; /* Per cpu counters */
@@ -236,11 +258,14 @@ struct batadv_priv {
 	struct delayed_work orig_work;
 	struct delayed_work vis_work;
 	struct delayed_work bla_work;
+	struct delayed_work bw_work;
 	struct batadv_gw_node __rcu *curr_gw;  /* rcu protected pointer */
 	atomic_t gw_reselect;
 	struct batadv_hard_iface __rcu *primary_if;  /* rcu protected pointer */
 	struct batadv_vis_info *my_vis_info;
 	struct batadv_algo_ops *bat_algo_ops;
+
+	struct bw_meter_vars *bw_meter_vars;
 };
 
 struct batadv_socket_client {

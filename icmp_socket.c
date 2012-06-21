@@ -26,6 +26,7 @@
 #include "hash.h"
 #include "originator.h"
 #include "hard-interface.h"
+#include "bw_meter.h"
 
 static struct batadv_socket_client *batadv_socket_client_hash[256];
 
@@ -172,8 +173,19 @@ static ssize_t batadv_socket_write(struct file *file, const char __user *buff,
 		goto out;
 	}
 
-	if (len >= sizeof(struct batadv_icmp_packet_rr))
-		packet_len = sizeof(struct batadv_icmp_packet_rr);
+	if (len == sizeof(struct icmp_packet_bw)){
+		batadv_dbg(DBG_BATMAN, bat_priv, "Starting bw meter\n");
+		if (copy_from_user(&icmp_packet_bw,
+				   buff, sizeof(struct icmp_packet_bw))){
+			len = -EFAULT;
+			goto out;
+		}
+		start_bw_meter(bat_priv, &icmp_packet_bw);
+		goto out;
+	}
+
+	if (len >= sizeof(struct icmp_packet_rr))
+		packet_len = sizeof(struct icmp_packet_rr);
 
 	skb = dev_alloc_skb(packet_len + ETH_HLEN);
 	if (!skb) {
