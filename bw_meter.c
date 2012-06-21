@@ -82,7 +82,7 @@ void send_whole_window(struct bat_priv *bat_priv)
 	/*start the timer*/
 	INIT_DELAYED_WORK(&bat_priv->bw_work, resend_window);
 	queue_delayed_work(batadv_event_workqueue, &bat_priv->bw_work,
-			   msecs_to_jiffies(1000));
+			   msecs_to_jiffies(5000));
 dst_unreach:
 	/*
 	icmp_to_send->msg_type = DESTINATION_UNREACHABLE;
@@ -134,29 +134,114 @@ void batadv_bw_ack_received(struct bat_priv *bat_priv, struct sk_buff *skb)
 	struct icmp_packet_bw *icmp_packet;
 	struct bw_meter_vars *bw_meter_vars = bat_priv->bw_meter_vars;
 
+	batadv_dbg(DBG_BATMAN, bat_priv, "Meter: received an ack\n");
+/*
 	icmp_packet = (struct icmp_packet_bw *)skb->data;
 
 	if (icmp_packet->offset != bw_meter_vars->first + BW_WINDOW_SIZE)
 		goto out;
 out:
 	return;
+*/
 }
 
 void batadv_bw_meter_received(struct bat_priv *bat_priv, struct sk_buff *skb)
 {
-	batadv_dbg(DBG_BATMAN, bat_priv, "Bandwidth meter packet received\n");	
 
-	struct icmp_packet_bw *icmp_packet;
+	struct hard_iface *primary_if = NULL;
+	struct orig_node *orig_node = NULL;
+	struct neigh_node *neigh_node = NULL;
+	struct icmp_packet_bw *icmp_packet, *icmp_ack;
 
 	icmp_packet = (struct icmp_packet_bw *)skb->data;
 
 	if (!bat_priv->bw_meter_vars){
+		if (icmp_packet->offset != 0)
+			goto out;
 		bat_priv->bw_meter_vars = 
 			kmalloc(sizeof(struct bw_meter_vars), GFP_ATOMIC);
 		if (!bat_priv->bw_meter_vars)
 			goto out;
 		bat_priv->bw_meter_vars->status = INACTIVE;
+	}
 
-	/*is the packet expected?*/
-	/*decrease*/
+	if (bat_priv->bw_meter_vars->status == INACTIVE){
+		if (icmp_packet->offset != 0)
+			goto out;
+		bat_priv->bw_meter_vars->status = RECEIVER;
+		bat_priv->bw_meter_vars->first = 0; 
+		bat_priv->bw_meter_vars->to_send = 0;
+		bat_priv->bw_meter_vars->wsize = icmp_packet->wsize;
+	}
+
+	/*check if packet expected*/
+	if (icmp_packet->offset < bat_priv->bw_meter_vars->first)
+		goto out; //TODO send an ack!
+	
+	if (icmp_packet->offset > 
+	    bat_priv->bw_meter_vars->first + bat_priv->bw_meter_vars->wsize)
+	    	goto out; //TODO ??
+
+	bat_priv->bw_meter_vars->to_send += skb->len;	
+	batadv_dbg(DBG_BATMAN, bat_priv, "Bandwidth meter packet received -> To send:%d< %s %s \n",
+		   bat_priv->bw_meter_vars->to_send,
+		   bat_priv->bw_meter_vars->first,
+		   icmp_packet->wsize);	
+
+	/*window full*/
+	if (bat_priv->bw_meter_vars->to_send >=
+	    bat_priv->bw_meter_vars->first + icmp_packet->wsize){
+	    	bat_priv->bw_meter_vars->first += 
+		bat_priv->bw_meter_vars->wsize;
+		bat_priv->bw_meter_vars->to_send = 0;
+
+		/*fill the ACK*/
+		batadv_dbg(DBG_BATMAN, bat_priv, "Meter: sending the ack!\n");
+		skb = dev_alloc_skb(sizeof(struct icmp_packet_bw) + ETH_HLEN);
+		if (!skb)
+			goto out;
+		
+		skb_reserve(skb, ETH_HLEN);
+		icmp_ack = (struct icmp_packet_bw *) 
+			   skb_put(skb, sizeof(struct icmp_packet_bw));
+		icmp_ack->offset = bat_priv->bw_meter_vars->first;
+		icmp_ack->msg_type = BW_ACK;
+		memcpy(icmp_ack->orig, icmp_packet->dst, ETH_ALEN);
+		memcpy(icmp_ack->dst, icmp_packet->orig, ETH_ALEN);
+		/*icmp_ack->uid = socket_client->index;*/ //TODO see if needed
+
+		/*send the ack*/
+		primary_if = batadv_primary_if_get_selected(bat_priv);
+		if (!primary_if)
+			goto out;
+		if (atomic_read(&bat_priv->mesh_state) != MESH_ACTIVE)
+			goto dst_unreach;
+
+		orig_node = batadv_orig_hash_find(bat_priv, 
+						  icmp_ack->dst);
+		if (!orig_node)
+			goto dst_unreach;
+
+		neigh_node = batadv_orig_node_get_router(orig_node);
+		if (!neigh_node)
+			goto dst_unreach;
+
+		if (!neigh_node->if_incoming)
+			goto dst_unreach;
+
+		if (neigh_node->if_incoming->if_status != IF_ACTIVE)
+			goto dst_unreach;
+
+		memcpy(icmp_ack->orig, 
+		       primary_if->net_dev->dev_addr, ETH_ALEN);
+
+		batadv_send_skb_packet(skb, neigh_node->if_incoming, 
+				       neigh_node->addr);
+       }
+       goto out;
+
+dst_unreach:
+	return; //TODO!!
+out:
+	return;
 }
