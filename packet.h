@@ -167,8 +167,8 @@ struct icmp_packet_bw {
 	__be16   seqno;
 	uint8_t  uid;
 	uint8_t  reserved;
-	uint32_t offset;
 	uint32_t wsize; 
+	uint32_t offset;
 } __packed;
 
 struct unicast_packet {
