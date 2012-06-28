@@ -249,6 +249,33 @@ struct batadv_unicast_4addr_packet {
 	 */
 };
 
+/**
+ * struct batadv_frag_packet - Network structure for fragments.
+ * @header: Common batman-adv header with type, compatibility version, and ttl.
+ * @dest: Final destination used when routing fragments.
+ * @orig: Originator of the fragment used when merging the packet.
+ * @no: Fragment number within this sequence.
+ * @reserved: Unused
+ * @seqno: Sequence identification.
+ * @total_size: Size of the merged packet.
+ */
+struct batadv_frag_packet {
+	struct  batadv_header header;
+#if defined(__BIG_ENDIAN_BITFIELD)
+	uint8_t no:4;
+	uint8_t reserved:4;
+#elif defined(__LITTLE_ENDIAN_BITFIELD)
+	uint8_t reserved:4;
+	uint8_t no:4;
+#else
+#error "unknown bitfield endianess"
+#endif
+	uint8_t dest[ETH_ALEN];
+	uint8_t orig[ETH_ALEN];
+	__be16  seqno;
+	__be16  total_size;
+};
+
 struct batadv_bcast_packet {
 	struct batadv_header header;
 	uint8_t  reserved;
