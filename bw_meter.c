@@ -74,14 +74,13 @@ out:
 	return ret;
 }
 
-
 void batadv_bw_ack_received(struct bat_priv *bat_priv, struct sk_buff *skb)
 {
 	struct icmp_packet_bw *icmp_packet;
 	struct bw_meter_vars *bw_meter_vars = bat_priv->bw_meter_vars;
 
 	batadv_dbg(DBG_BATMAN, bat_priv, "Meter: received an ack\n");
-	//cancel_delayed_work_sync(&bat_priv->bw_work); //TODO kernel panic
+	cancel_delayed_work_sync(&bat_priv->bw_work); //TODO kernel panic
 	icmp_packet = (struct icmp_packet_bw *)skb->data;
 
 out:
@@ -126,8 +125,6 @@ int batadv_send_whole_window(struct bat_priv *bat_priv, int send_offset)
 		}
 	}
 
-	/*start the timer*/
-	INIT_DELAYED_WORK(&bat_priv->bw_work, resend_window);
 	queue_delayed_work(batadv_event_workqueue, &bat_priv->bw_work,
 			   msecs_to_jiffies(5000));
 	ret = 0;
@@ -150,6 +147,7 @@ void start_bw_meter(struct bat_priv *bat_priv,
 			goto out;
 
 		bat_priv->bw_meter_vars->status = INACTIVE;
+		INIT_DELAYED_WORK(&bat_priv->bw_work, resend_window);
 	}
 
 	if (bat_priv->bw_meter_vars->status != INACTIVE)
