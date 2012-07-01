@@ -6,11 +6,13 @@
 #include "bw_meter.h"
 #include "icmp_socket.h"
 #include "types.h"
+#include "bw_meter.h"
 
 #define BW_PACKET_LEN 1000
 #define BW_WINDOW_SIZE 5
+#define BW_TIMEOUT 5000
 
-static void resend_window(struct work_struct *work)
+static void batadv_bw_worker(struct work_struct *work)
 {
 	struct delayed_work *delayed_work =
 		container_of(work, struct delayed_work, work);
@@ -74,30 +76,19 @@ out:
 	return ret;
 }
 
-void batadv_bw_ack_received(struct bat_priv *bat_priv, struct sk_buff *skb)
-{
-	struct icmp_packet_bw *icmp_packet;
-	struct bw_meter_vars *bw_meter_vars = bat_priv->bw_meter_vars;
-
-	batadv_dbg(DBG_BATMAN, bat_priv, "Meter: received an ack\n");
-	cancel_delayed_work_sync(&bat_priv->bw_work); //TODO kernel panic
-	icmp_packet = (struct icmp_packet_bw *)skb->data;
-
-out:
-	return;
-}
-
-int batadv_send_whole_window(struct bat_priv *bat_priv, int send_offset)
+/*sends packets from last_sent to (first+BW_WINDOW_SIZE) */
+int batadv_send_whole_window(struct bat_priv *bat_priv)
 {
 	struct sk_buff *skb;
 	struct icmp_packet_bw *icmp_packet_bw, *icmp_to_send;
-	int last, ret = -1;
+	int send_offset, last, ret = -1;
 	struct socket_client *socket_client = 
 		container_of(&bat_priv, struct socket_client, bat_priv);
 
 	batadv_dbg(DBG_BATMAN, bat_priv, "Meter: send_whole_window called\n");
-	icmp_packet_bw = bat_priv->bw_meter_vars->icmp_packet_bw;
-	last = bat_priv->bw_meter_vars->first + BW_WINDOW_SIZE;
+	icmp_packet_bw = bat_priv->bw_vars->icmp_packet_bw;
+	last = bat_priv->bw_vars->first + BW_WINDOW_SIZE;
+	send_offset = bat_priv->bw_vars->last_sent;
 
 	while (send_offset < last){
 		skb = dev_alloc_skb(BW_PACKET_LEN + ETH_HLEN);
@@ -125,12 +116,31 @@ int batadv_send_whole_window(struct bat_priv *bat_priv, int send_offset)
 		}
 	}
 
-	queue_delayed_work(batadv_event_workqueue, &bat_priv->bw_work,
-			   msecs_to_jiffies(5000));
 	ret = 0;
 
 out:
 	return ret;
+}
+
+void batadv_bw_ack_received(struct bat_priv *bat_priv, struct sk_buff *skb)
+{
+	struct icmp_packet_bw *icmp_packet;
+	struct bw_vars *bw_vars = bat_priv->bw_vars;
+
+	batadv_dbg(DBG_BATMAN, bat_priv, "Meter: received an ack\n");
+
+	/*slide the window*/
+	icmp_packet = (struct icmp_packet_bw *)skb->data;
+	if (icmp_packet->seqno < bat_priv->bw_vars->first){
+		goto out;
+	}
+	if (icmp_packet->seqno > bat_priv->bw_vars->last_sent){
+		goto out;
+	}
+	bat_priv->bw_vars->first = icmp_packet->seqno;
+	batadv_send_whole_window(bat_priv);
+out:
+	return;
 }
 
 void start_bw_meter(struct bat_priv *bat_priv, 
@@ -139,25 +149,28 @@ void start_bw_meter(struct bat_priv *bat_priv,
 	batadv_dbg(DBG_BATMAN, bat_priv, "Meter started...\n");
 
 	/*TODO should I check the parameters?*/
-	/*check bw_meter_vars*/
-	if (!bat_priv->bw_meter_vars){
-		bat_priv->bw_meter_vars = kmalloc(sizeof(struct bw_meter_vars),
+	/*check bw_vars*/
+	if (!bat_priv->bw_vars){
+		bat_priv->bw_vars = kmalloc(sizeof(struct bw_vars),
 						  GFP_ATOMIC); /*TODO GFP kernel?*/
-		if (!bat_priv->bw_meter_vars)
+		if (!bat_priv->bw_vars)
 			goto out;
 
-		bat_priv->bw_meter_vars->status = INACTIVE;
-		INIT_DELAYED_WORK(&bat_priv->bw_work, resend_window);
+		bat_priv->bw_vars->status = INACTIVE;
+		INIT_DELAYED_WORK(&bat_priv->bw_work, batadv_bw_worker);
+		queue_delayed_work(batadv_event_workqueue, &bat_priv->bw_work,
+				   msecs_to_jiffies(BW_TIMEOUT));
 	}
 
-	if (bat_priv->bw_meter_vars->status != INACTIVE)
+	if (bat_priv->bw_vars->status != INACTIVE)
 		goto out;
 	
-	bat_priv->bw_meter_vars->icmp_packet_bw = icmp_packet_bw;
-	bat_priv->bw_meter_vars->to_send = 10;
-	bat_priv->bw_meter_vars->first = 0;
+	bat_priv->bw_vars->icmp_packet_bw = icmp_packet_bw;
+	bat_priv->bw_vars->to_send = 10;
+	bat_priv->bw_vars->last_sent = 0;
+	bat_priv->bw_vars->first = 0;
 
-	batadv_send_whole_window(bat_priv, 0);
+	batadv_send_whole_window(bat_priv);
 	goto out;
 	
 out:
@@ -213,54 +226,54 @@ void batadv_bw_meter_received(struct bat_priv *bat_priv, struct sk_buff *skb)
 	icmp_packet = (struct icmp_packet_bw *)skb->data;
 
 	/*setup RECEIVER data structure*/
-	if (!bat_priv->bw_meter_vars){
+	if (!bat_priv->bw_vars){
 		if (icmp_packet->seqno != 0){
 			batadv_dbg(DBG_BATMAN, bat_priv, 
 				   "Meter: seq != 0 cannot initiate connection\n");
 			goto out;
 		}
-		bat_priv->bw_meter_vars = 
-			kmalloc(sizeof(struct bw_meter_vars), GFP_ATOMIC);
-		if (!bat_priv->bw_meter_vars){
+		bat_priv->bw_vars = 
+			kmalloc(sizeof(struct bw_vars), GFP_ATOMIC);
+		if (!bat_priv->bw_vars){
 			batadv_dbg(DBG_BATMAN, bat_priv, 
-				   "Meter: meter_received cannot allocate bw_meter_vars\n");
+				   "Meter: meter_received cannot allocate bw_vars\n");
 			goto out;
 		}
-		bat_priv->bw_meter_vars->status = INACTIVE;
+		bat_priv->bw_vars->status = INACTIVE;
 	}
 
-	if (bat_priv->bw_meter_vars->status == INACTIVE){
+	if (bat_priv->bw_vars->status == INACTIVE){
 		if (icmp_packet->seqno != 0)
 			goto out;
-		bat_priv->bw_meter_vars->status = RECEIVER;
-		bat_priv->bw_meter_vars->first = 0; 
-		bat_priv->bw_meter_vars->to_send = 0;
+		bat_priv->bw_vars->status = RECEIVER;
+		bat_priv->bw_vars->first = 0; 
+		bat_priv->bw_vars->to_send = 0;
 	}
 
-	if (bat_priv->bw_meter_vars->status != RECEIVER){
+	if (bat_priv->bw_vars->status != RECEIVER){
 		batadv_dbg(DBG_BATMAN, bat_priv, 
 			   "Meter: cannot be sender and receiver\n");
 		goto out;
 	}
 
 	/*check if packet belongs to window*/
-	if (icmp_packet->seqno < bat_priv->bw_meter_vars->first){
+	if (icmp_packet->seqno < bat_priv->bw_vars->first){
 		batadv_dbg(DBG_BATMAN, bat_priv, 
 			   "Meter: I should send the hack again:)\n");
 		goto out; //TODO send an ack!
 	}
 	
 	if (icmp_packet->seqno > 
-	    bat_priv->bw_meter_vars->first + icmp_packet->wsize){
+	    bat_priv->bw_vars->first + icmp_packet->wsize){
 		batadv_dbg(DBG_BATMAN, bat_priv, 
 			   "Meter: unexpected packet received\n");
 	    	goto out; //TODO ??
 	}
 
-	if (icmp_packet->seqno == bat_priv->bw_meter_vars->first){
+	if (icmp_packet->seqno == bat_priv->bw_vars->first){
 		batadv_dbg(DBG_BATMAN, bat_priv, 
 			   "Meter: sending ack\n");
-		bat_priv->bw_meter_vars->first++;
+		bat_priv->bw_vars->first++;
 		batadv_send_bw_ack(socket_client, 
 				   (struct icmp_packet *) icmp_packet,
 				   icmp_packet->seqno);
