@@ -175,14 +175,13 @@ enum bw_meter_status {
 
 struct bw_vars {
 	/*total data to send OR window data received*/
-	uint32_t to_send; 
+	uint32_t total_to_send; 
 	/*offset of the first window packet*/
-	uint32_t first;
+	uint32_t window_first;
+	uint32_t next_to_send;
 	/*window size*/
 	uint32_t wsize;
-	uint32_t last_sent;
-	uint32_t last_sent_time;
-	struct icmp_packet_bw *icmp_packet_bw;
+	unsigned long last_sent_time;
 	uint8_t other_end[ETH_ALEN];
 	uint8_t status; /*see bm_meter_status*/
 };

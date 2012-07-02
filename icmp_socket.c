@@ -180,7 +180,7 @@ static ssize_t batadv_socket_write(struct file *file, const char __user *buff,
 			len = -EFAULT;
 			goto out;
 		}
-		start_bw_meter(bat_priv, &icmp_packet_bw);
+		batadv_bw_start(bat_priv, &icmp_packet_bw);
 		goto out;
 	}
 
