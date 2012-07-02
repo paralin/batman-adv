@@ -179,8 +179,7 @@ struct bw_vars {
 	/*offset of the first window packet*/
 	uint32_t window_first;
 	uint32_t next_to_send;
-	/*window size*/
-	uint32_t wsize;
+	DECLARE_BITMAP(bw_bits, TQ_LOCAL_WINDOW_SIZE);
 	unsigned long last_sent_time;
 	uint8_t other_end[ETH_ALEN];
 	uint8_t status; /*see bm_meter_status*/
