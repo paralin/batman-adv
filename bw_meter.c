@@ -8,10 +8,10 @@
 #include "types.h"
 #include "bw_meter.h"
 
-#define BW_PACKET_LEN 1000
-#define BW_WINDOW_SIZE 5
+#define BW_PACKET_LEN 1500
+#define BW_WINDOW_SIZE 300
 #define BW_CLEAN_RECEIVER_TIMEOUT 2000
-#define BW_TIMEOUT 5000
+#define BW_TIMEOUT 800
 #define BW_WORKER_TIMEOUT BW_TIMEOUT/10
 
 int send_icmp_packet(struct bat_priv *bat_priv, struct sk_buff *skb)
@@ -215,23 +215,72 @@ static void batadv_bw_worker(struct work_struct *work)
 		container_of(work, struct delayed_work, work);
 	struct bat_priv *bat_priv =
 		container_of(delayed_work, struct bat_priv, bw_work);
+	unsigned long int test_time;
 
 	if(batadv_has_timed_out(bat_priv->bw_vars->last_sent_time, BW_TIMEOUT)){
 		bat_priv->bw_vars->next_to_send = bat_priv->bw_vars->window_first;
+	   	batadv_send_remaining_window(bat_priv);
 	}
 
-	if(bat_priv->bw_vars->next_to_send !=
-	   bat_priv->bw_vars->window_first + BW_WINDOW_SIZE){
-	   	batadv_send_whole_window(bat_priv);
-	}
-	
 	/*if not finished, re-enqueue worker*/
 	if (bat_priv->bw_vars->window_first <
 	    bat_priv->bw_vars->total_to_send){
 		queue_delayed_work(batadv_event_workqueue, &bat_priv->bw_work,
 				   msecs_to_jiffies(BW_WORKER_TIMEOUT));
-	}else
-		printk("Meter: test over!\n");
+	}else{
+		test_time = (long)jiffies - (long)bat_priv->bw_vars->start_time;
+		printk("Meter: test over in %u s. Throughput %u B/s\n", 
+		       test_time/HZ,
+		       bat_priv->bw_vars->total_to_send * 
+		       BW_PACKET_LEN / (test_time/HZ));
+	}
+}
+
+/*sends packets from next_to_send to (window_first+BW_WINDOW_SIZE) */
+int batadv_send_remaining_window(struct bat_priv *bat_priv)
+{
+	struct sk_buff *skb;
+	struct icmp_packet_bw *icmp_to_send;
+	int send_until, ret = -1, bw_packet_len = BW_PACKET_LEN;
+	struct socket_client *socket_client = 
+		container_of(&bat_priv, struct socket_client, bat_priv);
+
+	send_until = min(bat_priv->bw_vars->window_first + BW_WINDOW_SIZE, 
+		   	 bat_priv->bw_vars->total_to_send + 1);
+	
+	while (bat_priv->bw_vars->next_to_send < send_until){
+		if (bat_priv->bw_vars->next_to_send ==
+		    bat_priv->bw_vars->total_to_send)
+			bw_packet_len -= 1;
+
+		skb = dev_alloc_skb(bw_packet_len + ETH_HLEN);
+		if (!skb) {
+			batadv_dbg(DBG_BATMAN, bat_priv, 
+				   "Meter: send_remaining_window() cannot allocate skb\n");
+			goto out;
+		}
+
+		skb_reserve(skb, ETH_HLEN);
+		icmp_to_send = (struct icmp_packet_bw *)skb_put(skb, 
+								bw_packet_len);//TODO redefine BW_PACKET_LEN
+		
+		/*fill the icmp header*/
+		memcpy (&icmp_to_send->dst, &bat_priv->bw_vars->other_end, ETH_ALEN);
+		icmp_to_send->header.version = COMPAT_VERSION;
+		icmp_to_send->header.packet_type = BAT_ICMP;
+		icmp_to_send->msg_type = BW_METER;
+		icmp_to_send->seqno = bat_priv->bw_vars->next_to_send++;
+		icmp_to_send->uid = socket_client->index;
+		if (send_icmp_packet(bat_priv, skb) < 0 ){
+			batadv_dbg(DBG_BATMAN, bat_priv, 
+				   "Meter: send_remaining_window cannot send_icmp_packet\n");
+			goto out;
+		}
+		bat_priv->bw_vars->last_sent_time = jiffies;
+	}
+	ret = 0;
+out:
+	return ret;
 }
 
 void batadv_bw_ack_received(struct bat_priv *bat_priv, struct sk_buff *skb)
@@ -251,55 +300,9 @@ void batadv_bw_ack_received(struct bat_priv *bat_priv, struct sk_buff *skb)
 		goto out;
 	}
 	bat_priv->bw_vars->window_first = icmp_packet->seqno + 1;
+	batadv_send_remaining_window(bat_priv);
 out:
 	return;
-}
-
-/*sends packets from next_to_send to (window_first+BW_WINDOW_SIZE) */
-int batadv_send_whole_window(struct bat_priv *bat_priv)
-{
-	struct sk_buff *skb;
-	struct icmp_packet_bw *icmp_to_send;
-	int send_until, ret = -1, bw_packet_len = BW_PACKET_LEN;
-	struct socket_client *socket_client = 
-		container_of(&bat_priv, struct socket_client, bat_priv);
-
-	send_until = min(bat_priv->bw_vars->window_first + BW_WINDOW_SIZE, 
-		   	 bat_priv->bw_vars->total_to_send + 1);
-	
-	while (bat_priv->bw_vars->next_to_send < send_until){
-		if (bat_priv->bw_vars->next_to_send ==
-		    bat_priv->bw_vars->total_to_send)
-			bw_packet_len -= 1;
-
-		skb = dev_alloc_skb(bw_packet_len + ETH_HLEN);
-		if (!skb) {
-			batadv_dbg(DBG_BATMAN, bat_priv, 
-				   "Meter: send_whole_window() cannot allocate skb\n");
-			goto out;
-		}
-
-		skb_reserve(skb, ETH_HLEN);
-		icmp_to_send = (struct icmp_packet_bw *)skb_put(skb, 
-								bw_packet_len);//TODO redefine BW_PACKET_LEN
-		
-		/*fill the icmp header*/
-		memcpy (&icmp_to_send->dst, &bat_priv->bw_vars->other_end, ETH_ALEN);
-		icmp_to_send->header.version = COMPAT_VERSION;
-		icmp_to_send->header.packet_type = BAT_ICMP;
-		icmp_to_send->msg_type = BW_METER;
-		icmp_to_send->seqno = bat_priv->bw_vars->next_to_send++;
-		icmp_to_send->uid = socket_client->index;
-		if (send_icmp_packet(bat_priv, skb) < 0 ){
-			batadv_dbg(DBG_BATMAN, bat_priv, 
-				   "Meter: send_whole_window cannot send_icmp_packet\n");
-			goto out;
-		}
-		bat_priv->bw_vars->last_sent_time = jiffies;
-	}
-	ret = 0;
-out:
-	return ret;
 }
 
 void batadv_bw_start(struct bat_priv *bat_priv, 
@@ -307,7 +310,6 @@ void batadv_bw_start(struct bat_priv *bat_priv,
 {
 	batadv_dbg(DBG_BATMAN, bat_priv, "Meter started...\n");
 
-	/*TODO should I check the parameters?*/
 	/*check bw_vars*/
 	if (!bat_priv->bw_vars){
 		bat_priv->bw_vars = kmalloc(sizeof(struct bw_vars),
@@ -322,14 +324,16 @@ void batadv_bw_start(struct bat_priv *bat_priv,
 		goto out;
 	
 	memcpy(&bat_priv->bw_vars->other_end, &icmp_packet_bw->dst, ETH_ALEN);
-	bat_priv->bw_vars->total_to_send = 50;
+	bat_priv->bw_vars->total_to_send = 3000;
 	bat_priv->bw_vars->next_to_send = 0;
 	bat_priv->bw_vars->window_first = 0;
 	bat_priv->bw_vars->last_sent_time = jiffies;
+	bat_priv->bw_vars->start_time = jiffies;
 
 	INIT_DELAYED_WORK(&bat_priv->bw_work, batadv_bw_worker);
 	queue_delayed_work(batadv_event_workqueue, &bat_priv->bw_work, 
-			   jiffies + 1);
+			   msecs_to_jiffies(BW_TIMEOUT));
+	batadv_send_remaining_window(bat_priv);
 	goto out;
 out:
 	return;
