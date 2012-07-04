@@ -291,12 +291,12 @@ static int batadv_recv_my_icmp_packet(struct batadv_priv *bat_priv,
 
 	icmp_packet = (struct batadv_icmp_packet_rr *)skb->data;
 
-	if (icmp_packet->msg_type == BW_METER) {
+	if (icmp_packet->msg_type == BATADV_BW_METER) {
 		batadv_bw_meter_received(bat_priv, skb);
 		goto out;
 	}
 
-	if (icmp_packet->msg_type == BW_ACK) {
+	if (icmp_packet->msg_type == BATADV_BW_ACK) {
 		batadv_bw_ack_received(bat_priv, skb);
 		goto out;
 	}
@@ -439,8 +439,8 @@ int batadv_recv_icmp_packet(struct sk_buff *skb,
 	/* add record route information if not full */
 	if ((hdr_size == sizeof(struct batadv_icmp_packet_rr)) &&
 	    (icmp_packet->rr_cur < BATADV_RR_LEN) &&
-	    (icmp_packet->msg_type != BW_METER) &&
-	    (icmp_packet->msg_type != BW_ACK)) {
+	    (icmp_packet->msg_type != BATADV_BW_METER) &&
+	    (icmp_packet->msg_type != BATADV_BW_ACK)) {
 		memcpy(&(icmp_packet->rr[icmp_packet->rr_cur]),
 		       ethhdr->h_dest, ETH_ALEN);
 		icmp_packet->rr_cur++;

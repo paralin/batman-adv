@@ -50,8 +50,8 @@ enum icmp_packettype {
 	BATADV_ECHO_REQUEST		= 8,
 	BATADV_TTL_EXCEEDED		= 11,
 	BATADV_PARAMETER_PROBLEM	= 12,
-	BW_METER		= 15,
-	BW_ACK			= 16,
+	BATADV_BW_METER			= 15,
+	BATADV_BW_ACK			= 16,
 };
 
 /* vis defines */
@@ -160,7 +160,7 @@ struct batadv_icmp_packet_rr {
 /* icmp_packet_bw must start with all fields from imcp_packet
  * as this is assumed by code that handles ICMP packets
  */
-struct icmp_packet_bw {
+struct batadv_icmp_packet_bw {
 	struct batadv_header header;
 	uint8_t  msg_type; /* see ICMP message types above */
 	uint8_t  dst[ETH_ALEN];
