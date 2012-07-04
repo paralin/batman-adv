@@ -164,9 +164,6 @@ enum batadv_counters {
 	BATADV_CNT_NUM,
 };
 
-<<<<<<< HEAD
-struct batadv_priv {
-=======
 enum bw_meter_status {
 	INACTIVE,
 	RECEIVER,
@@ -174,6 +171,8 @@ enum bw_meter_status {
 };
 
 struct bw_vars {
+	struct list_head list;
+	spinlock_t bw_vars_lock;
 	/*total data to send OR window data received*/
 	uint32_t total_to_send; 
 	/*offset of the first window packet*/
@@ -184,10 +183,11 @@ struct bw_vars {
 	unsigned long last_sent_time;
 	uint8_t other_end[ETH_ALEN];
 	uint8_t status; /*see bm_meter_status*/
+	struct delayed_work bw_work;
+	struct bat_priv *bat_priv;
 };
 
 struct bat_priv {
->>>>>>> bw_meter and relative struct first skeletron
 	atomic_t mesh_state;
 	struct net_device_stats stats;
 	uint64_t __percpu *bat_counters; /* Per cpu counters */
@@ -226,6 +226,7 @@ struct bat_priv {
 	struct hlist_head gw_list;
 	struct list_head tt_changes_list; /* tracks changes in a OGM int */
 	struct list_head vis_send_list;
+	struct list_head bw_list;
 	struct batadv_hashtable *orig_hash;
 	struct batadv_hashtable *tt_local_hash;
 	struct batadv_hashtable *tt_global_hash;
@@ -249,6 +250,7 @@ struct bat_priv {
 	spinlock_t gw_list_lock; /* protects gw_list and curr_gw */
 	spinlock_t vis_hash_lock; /* protects vis_hash */
 	spinlock_t vis_list_lock; /* protects vis_info::recv_list */
+	spinlock_t bw_list_lock;
 	atomic_t num_local_tt;
 	/* Checksum of the local table, recomputed before sending a new OGM */
 	uint16_t tt_crc;
@@ -259,14 +261,11 @@ struct bat_priv {
 	struct delayed_work orig_work;
 	struct delayed_work vis_work;
 	struct delayed_work bla_work;
-	struct delayed_work bw_work;
 	struct batadv_gw_node __rcu *curr_gw;  /* rcu protected pointer */
 	atomic_t gw_reselect;
 	struct batadv_hard_iface __rcu *primary_if;  /* rcu protected pointer */
 	struct batadv_vis_info *my_vis_info;
 	struct batadv_algo_ops *bat_algo_ops;
-
-	struct bw_vars *bw_vars;
 };
 
 struct batadv_socket_client {
