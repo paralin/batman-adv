@@ -174,7 +174,6 @@ static ssize_t batadv_socket_write(struct file *file, const char __user *buff,
 	}
 
 	if (len == sizeof(struct icmp_packet_bw)){
-		batadv_dbg(DBG_BATMAN, bat_priv, "Starting bw meter\n");
 		if (copy_from_user(&icmp_packet_bw,
 				   buff, sizeof(struct icmp_packet_bw))){
 			len = -EFAULT;
