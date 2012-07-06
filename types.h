@@ -172,19 +172,22 @@ enum bw_meter_status {
 
 struct bw_vars {
 	struct list_head list;
-	spinlock_t bw_vars_lock;
-	/*total data to send OR window data received*/
-	uint32_t total_to_send; 
-	/*offset of the first window packet*/
-	uint32_t window_first;
-	uint32_t next_to_send;
-	unsigned long start_time;
-	DECLARE_BITMAP(bw_bits, TQ_LOCAL_WINDOW_SIZE);
-	unsigned long last_sent_time;
-	uint8_t other_end[ETH_ALEN];
-	uint8_t status; /*see bm_meter_status*/
 	struct delayed_work bw_work;
 	struct bat_priv *bat_priv;
+	/*lock used in receiver*/
+	spinlock_t bw_vars_lock;
+	/*locks used in sender*/
+	spinlock_t bw_ack_lock;
+	spinlock_t bw_send_lock;
+	/*total data to send OR window data received*/
+	uint16_t total_to_send; 
+	/*offset of the first window packet*/
+	uint16_t next_to_send;
+	uint16_t window_first;
+	uint8_t other_end[ETH_ALEN];
+	uint8_t status; /*see bm_meter_status*/
+	unsigned long start_time;
+	unsigned long last_sent_time;
 };
 
 struct bat_priv {
