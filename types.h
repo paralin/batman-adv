@@ -173,7 +173,7 @@ enum bw_meter_status {
 struct bw_vars {
 	struct list_head list;
 	struct delayed_work bw_work;
-	struct bat_priv *bat_priv;
+	struct batadv_priv *bat_priv;
 	/*lock used in receiver*/
 	spinlock_t bw_vars_lock;
 	/*locks used in sender*/
@@ -190,7 +190,7 @@ struct bw_vars {
 	unsigned long last_sent_time;
 };
 
-struct bat_priv {
+struct batadv_priv {
 	atomic_t mesh_state;
 	struct net_device_stats stats;
 	uint64_t __percpu *bat_counters; /* Per cpu counters */

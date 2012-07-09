@@ -45,13 +45,13 @@ enum batadv_iv_flags {
 
 /* ICMP message types */
 enum icmp_packettype {
-	ECHO_REPLY		= 0,
-	DESTINATION_UNREACHABLE = 3,
-	ECHO_REQUEST		= 8,
-	TTL_EXCEEDED		= 11,
-	PARAMETER_PROBLEM	= 12,
-	BW_METER 		= 15, 
-	BW_ACK	 		= 16,
+	BATADV_ECHO_REPLY		= 0,
+	BATADV_DESTINATION_UNREACHABLE 	= 3,
+	BATADV_ECHO_REQUEST		= 8,
+	BATADV_TTL_EXCEEDED		= 11,
+	BATADV_PARAMETER_PROBLEM	= 12,
+	BW_METER 			= 15, 
+	BW_ACK	 			= 16,
 };
 
 /* vis defines */
@@ -170,7 +170,7 @@ struct icmp_packet_bw {
 	uint32_t wsize; 
 } __packed;
 
-struct unicast_packet {
+struct batadv_unicast_packet {
 	struct batadv_header header;
 	uint8_t  ttvn; /* destination translation table version number */
 	uint8_t  dest[ETH_ALEN];
