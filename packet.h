@@ -160,7 +160,7 @@ struct batadv_icmp_packet_rr {
  * as this is assumed by code that handles ICMP packets
  */
 struct icmp_packet_bw {
-	struct batman_header header;
+	struct batadv_header header;
 	uint8_t  msg_type; /* see ICMP message types above */
 	uint8_t  dst[ETH_ALEN];
 	uint8_t  orig[ETH_ALEN];
@@ -171,7 +171,7 @@ struct icmp_packet_bw {
 } __packed;
 
 struct unicast_packet {
-	struct batman_header header;
+	struct batadv_header header;
 	uint8_t  ttvn; /* destination translation table version number */
 	uint8_t  dest[ETH_ALEN];
 } __packed;
