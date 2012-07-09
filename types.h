@@ -180,7 +180,7 @@ struct bw_vars {
 	spinlock_t bw_ack_lock;
 	spinlock_t bw_send_lock;
 	/*total data to send OR window data received*/
-	uint16_t total_to_send; 
+	uint16_t total_to_send;
 	/*offset of the first window packet*/
 	uint16_t next_to_send;
 	uint16_t window_first;

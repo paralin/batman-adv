@@ -440,7 +440,7 @@ int batadv_recv_icmp_packet(struct sk_buff *skb,
 	if ((hdr_size == sizeof(struct batadv_icmp_packet_rr)) &&
 	    (icmp_packet->rr_cur < BATADV_RR_LEN) &&
 	    (icmp_packet->msg_type != BW_METER) &&
-	    (icmp_packet->msg_type != BW_ACK) ) { //TODO check what is rr :)
+	    (icmp_packet->msg_type != BW_ACK)) {
 		memcpy(&(icmp_packet->rr[icmp_packet->rr_cur]),
 		       ethhdr->h_dest, ETH_ALEN);
 		icmp_packet->rr_cur++;

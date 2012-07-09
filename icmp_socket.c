@@ -173,9 +173,9 @@ static ssize_t batadv_socket_write(struct file *file, const char __user *buff,
 		goto out;
 	}
 
-	if (len == sizeof(struct icmp_packet_bw)){
+	if (len == sizeof(struct icmp_packet_bw)) {
 		if (copy_from_user(&icmp_packet_bw,
-				   buff, sizeof(struct icmp_packet_bw))){
+				   buff, sizeof(struct icmp_packet_bw))) {
 			len = -EFAULT;
 			goto out;
 		}

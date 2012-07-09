@@ -50,8 +50,8 @@ enum icmp_packettype {
 	BATADV_ECHO_REQUEST		= 8,
 	BATADV_TTL_EXCEEDED		= 11,
 	BATADV_PARAMETER_PROBLEM	= 12,
-	BW_METER 			= 15, 
-	BW_ACK	 			= 16,
+	BW_METER			= 15,
+	BW_ACK				= 16,
 };
 
 /* vis defines */
@@ -167,7 +167,7 @@ struct icmp_packet_bw {
 	__be16   seqno;
 	uint8_t  uid;
 	uint8_t  reserved;
-	uint32_t wsize; 
+	uint32_t wsize;
 } __packed;
 
 struct batadv_unicast_packet {

@@ -19,7 +19,7 @@ static int batadv_send_icmp(struct batadv_priv *bat_priv, struct sk_buff *skb)
 	struct batadv_hard_iface *primary_if = NULL;
 	struct batadv_orig_node *orig_node = NULL;
 	struct batadv_neigh_node *neigh_node = NULL;
-	struct batadv_icmp_packet *icmp_packet = 
+	struct batadv_icmp_packet *icmp_packet =
 		(struct batadv_icmp_packet *)skb->data;
 	int ret = -1;
 
@@ -86,7 +86,7 @@ out:
 	return ret;
 }
 
-static struct bw_vars *batadv_bw_list_find(struct batadv_priv *bat_priv, 
+static struct bw_vars *batadv_bw_list_find(struct batadv_priv *bat_priv,
 					   void *dst)
 {
 	struct bw_vars *pos = NULL, *tmp;
@@ -156,7 +156,8 @@ void batadv_bw_meter_received(struct batadv_priv *bat_priv, struct sk_buff *skb)
 	struct bw_vars *bw_vars;
 	struct icmp_packet_bw *icmp_packet;
 	struct batadv_socket_client *socket_client;
-	socket_client = container_of(&bat_priv, struct batadv_socket_client, bat_priv);
+	socket_client = container_of(&bat_priv,
+				     struct batadv_socket_client, bat_priv);
 
 	icmp_packet = (struct icmp_packet_bw *)skb->data;
 
@@ -299,7 +300,7 @@ out:
 	return ret;
 }
 
-void batadv_bw_ack_received(struct batadv_priv *bat_priv, 
+void batadv_bw_ack_received(struct batadv_priv *bat_priv,
 				   struct sk_buff *skb)
 {
 	struct icmp_packet_bw *icmp_packet = (struct icmp_packet_bw *)skb->data;
