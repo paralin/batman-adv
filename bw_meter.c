@@ -86,7 +86,8 @@ out:
 	return ret;
 }
 
-struct bw_vars *batadv_bw_list_find(struct batadv_priv *bat_priv, void *dst)
+static struct bw_vars *batadv_bw_list_find(struct batadv_priv *bat_priv, 
+					   void *dst)
 {
 	struct bw_vars *pos = NULL, *tmp;
 
@@ -98,8 +99,8 @@ struct bw_vars *batadv_bw_list_find(struct batadv_priv *bat_priv, void *dst)
 	return NULL;
 }
 
-int batadv_bw_send_ack(struct batadv_socket_client *socket_client,
-		       struct batadv_icmp_packet *icmp_packet,  int seq)
+static int batadv_bw_send_ack(struct batadv_socket_client *socket_client,
+			      struct batadv_icmp_packet *icmp_packet,  int seq)
 {
 	struct sk_buff *skb;
 	struct icmp_packet_bw *icmp_ack;
@@ -136,7 +137,7 @@ out:
 	return ret;
 }
 
-void batadv_bw_receiver_clean(struct work_struct *work)
+static void batadv_bw_receiver_clean(struct work_struct *work)
 {
 	struct delayed_work *delayed_work =
 		container_of(work, struct delayed_work, work);
@@ -222,7 +223,7 @@ void batadv_bw_meter_received(struct batadv_priv *bat_priv, struct sk_buff *skb)
 		spin_unlock_bh(&bw_vars->bw_vars_lock);
 
 		batadv_bw_send_ack(socket_client,
-				   (struct icmp_packet *) icmp_packet,
+				   (struct batadv_icmp_packet *) icmp_packet,
 				   icmp_packet->seqno);
 
 		/* check for last packet */
@@ -240,44 +241,9 @@ out:
 	return;
 }
 
-static void batadv_bw_worker(struct work_struct *work)
-{
-	struct delayed_work *delayed_work =
-		container_of(work, struct delayed_work, work);
-	struct bw_vars *bw_vars =
-		container_of(delayed_work, struct bw_vars, bw_work);
-	struct batadv_priv *bat_priv = bw_vars->bat_priv;
-	unsigned long int test_time, total_bytes, throughput;
-
-	spin_lock_bh(&bw_vars->bw_vars_lock);
-	/* if timedout, resend whole window */
-	if (batadv_has_timed_out(bw_vars->last_sent_time, BW_TIMEOUT)) {
-		printk(KERN_INFO "RESENDING WHOLE WINDOW\n");
-		bw_vars->next_to_send = bw_vars->window_first;
-		spin_unlock_bh(&bw_vars->bw_vars_lock);
-		batadv_send_remaining_window(bat_priv, bw_vars);
-		spin_lock_bh(&bw_vars->bw_vars_lock);
-	}
-
-	/* if not finished, re-enqueue worker */
-	if (bw_vars->window_first < bw_vars->total_to_send) {
-		queue_delayed_work(batadv_event_workqueue, &bw_vars->bw_work,
-				   msecs_to_jiffies(BW_WORKER_TIMEOUT));
-	} else {
-		test_time = ((long)jiffies - (long)bw_vars->start_time) *
-			    (1000/HZ);
-		total_bytes = bw_vars->total_to_send * BW_PACKET_LEN;
-		throughput = total_bytes / test_time * 1000;
-
-		printk(KERN_INFO "Meter: test over in %lu ms.\nMeter: sent %lu bytes.\nThroughput %lu B/s",
-		       test_time, total_bytes, throughput);
-	}
-	spin_unlock_bh(&bw_vars->bw_vars_lock);
-}
-
 /* sends packets from next_to_send to (window_first+BW_WINDOW_SIZE) */
-int batadv_send_remaining_window(struct batadv_priv *bat_priv,
-				 struct bw_vars *bw_vars)
+static int batadv_send_remaining_window(struct batadv_priv *bat_priv,
+					struct bw_vars *bw_vars)
 {
 	struct sk_buff *skb;
 	struct icmp_packet_bw *icmp_to_send;
@@ -333,7 +299,8 @@ out:
 	return ret;
 }
 
-void batadv_bw_ack_received(struct batadv_priv *bat_priv, struct sk_buff *skb)
+void batadv_bw_ack_received(struct batadv_priv *bat_priv, 
+				   struct sk_buff *skb)
 {
 	struct icmp_packet_bw *icmp_packet = (struct icmp_packet_bw *)skb->data;
 	struct bw_vars *bw_vars;
@@ -363,6 +330,41 @@ void batadv_bw_ack_received(struct batadv_priv *bat_priv, struct sk_buff *skb)
 	}
 out:
 	return;
+}
+
+static void batadv_bw_worker(struct work_struct *work)
+{
+	struct delayed_work *delayed_work =
+		container_of(work, struct delayed_work, work);
+	struct bw_vars *bw_vars =
+		container_of(delayed_work, struct bw_vars, bw_work);
+	struct batadv_priv *bat_priv = bw_vars->bat_priv;
+	unsigned long int test_time, total_bytes, throughput;
+
+	spin_lock_bh(&bw_vars->bw_vars_lock);
+	/* if timedout, resend whole window */
+	if (batadv_has_timed_out(bw_vars->last_sent_time, BW_TIMEOUT)) {
+		printk(KERN_INFO "RESENDING WHOLE WINDOW\n");
+		bw_vars->next_to_send = bw_vars->window_first;
+		spin_unlock_bh(&bw_vars->bw_vars_lock);
+		batadv_send_remaining_window(bat_priv, bw_vars);
+		spin_lock_bh(&bw_vars->bw_vars_lock);
+	}
+
+	/* if not finished, re-enqueue worker */
+	if (bw_vars->window_first < bw_vars->total_to_send) {
+		queue_delayed_work(batadv_event_workqueue, &bw_vars->bw_work,
+				   msecs_to_jiffies(BW_WORKER_TIMEOUT));
+	} else {
+		test_time = ((long)jiffies - (long)bw_vars->start_time) *
+			    (1000/HZ);
+		total_bytes = bw_vars->total_to_send * BW_PACKET_LEN;
+		throughput = total_bytes / test_time * 1000;
+
+		printk(KERN_INFO "Meter: test over in %lu ms.\nMeter: sent %lu bytes.\nThroughput %lu B/s",
+		       test_time, total_bytes, throughput);
+	}
+	spin_unlock_bh(&bw_vars->bw_vars_lock);
 }
 
 void batadv_bw_start(struct batadv_priv *bat_priv,
