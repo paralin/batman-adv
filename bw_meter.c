@@ -278,6 +278,7 @@ static int batadv_bw_multiple_send(struct batadv_priv *bat_priv,
 		if (!skb) {
 			batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
 				   "Meter: batadv_bw_multiple_send() cannot allocate skb\n");
+			spin_unlock(&bw_vars->bw_send_lock);
 			goto out;
 		}
 
@@ -297,6 +298,7 @@ static int batadv_bw_multiple_send(struct batadv_priv *bat_priv,
 		if (batadv_bw_icmp_send(bat_priv, skb) < 0) {
 			batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
 				   "Meter: batadv_bw_multiple_send() cannot send_icmp_packet\n");
+			spin_unlock(&bw_vars->bw_send_lock);
 			goto out;
 		}
 
