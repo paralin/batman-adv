@@ -9,7 +9,7 @@
 #include "bw_meter.h"
 
 #define BW_PACKET_LEN 1000
-#define BW_WINDOW_SIZE 10
+#define BW_WINDOW_SIZE 22
 #define BW_CLEAN_RECEIVER_TIMEOUT 2000
 #define BW_TIMEOUT 800
 #define BW_WORKER_TIMEOUT (BW_TIMEOUT/10)
@@ -87,10 +87,10 @@ out:
 	return ret;
 }
 
-static struct bw_vars *batadv_bw_list_find(struct batadv_priv *bat_priv,
-					   void *dst)
+static struct batadv_bw_vars *batadv_bw_list_find(struct batadv_priv *bat_priv,
+						  void *dst)
 {
-	struct bw_vars *pos = NULL, *tmp;
+	struct batadv_bw_vars *pos = NULL, *tmp;
 
 	list_for_each_entry_safe(pos, tmp, &bat_priv->bw_list, list) {
 		if (memcmp(&pos->other_end, dst, ETH_ALEN) == 0)
@@ -104,12 +104,12 @@ static int batadv_bw_ack_send(struct batadv_socket_client *socket_client,
 			      struct batadv_icmp_packet *icmp_packet,  int seq)
 {
 	struct sk_buff *skb;
-	struct icmp_packet_bw *icmp_ack;
+	struct batadv_icmp_packet_bw *icmp_ack;
 	struct batadv_priv *bat_priv = socket_client->bat_priv;
 	int ret = -1;
 
 	bat_priv = socket_client->bat_priv;
-	skb = dev_alloc_skb(sizeof(struct icmp_packet_bw) + ETH_HLEN);
+	skb = dev_alloc_skb(sizeof(*skb) + ETH_HLEN);
 	if (!skb) {
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
 			   "Meter: batadv_send_bw_ack cannot allocate skb\n");
@@ -117,13 +117,13 @@ static int batadv_bw_ack_send(struct batadv_socket_client *socket_client,
 	}
 
 	skb_reserve(skb, ETH_HLEN);
-	icmp_ack = (struct icmp_packet_bw *)
-		   skb_put(skb, sizeof(struct icmp_packet_bw));
+	icmp_ack = (struct batadv_icmp_packet_bw *)
+		   skb_put(skb, sizeof(struct batadv_icmp_packet_bw));
 	icmp_ack->header.packet_type = BATADV_ICMP;
 	icmp_ack->header.version = BATADV_COMPAT_VERSION;
 	icmp_ack->header.ttl = 50;
 	icmp_ack->seqno = seq;
-	icmp_ack->msg_type = BW_ACK;
+	icmp_ack->msg_type = BATADV_BW_ACK;
 	memcpy(icmp_ack->dst, icmp_packet->orig, ETH_ALEN);
 	icmp_ack->uid = socket_client->index;
 
@@ -142,8 +142,8 @@ static void batadv_bw_receiver_clean(struct work_struct *work)
 {
 	struct delayed_work *delayed_work =
 		container_of(work, struct delayed_work, work);
-	struct bw_vars *bw_vars =
-		container_of(delayed_work, struct bw_vars, bw_work);
+	struct batadv_bw_vars *bw_vars =
+		container_of(delayed_work, struct batadv_bw_vars, bw_work);
 
 	/* TODO deallocate struct */
 	pr_info("test finished\n");
@@ -154,14 +154,14 @@ static void batadv_bw_receiver_clean(struct work_struct *work)
 
 void batadv_bw_meter_received(struct batadv_priv *bat_priv, struct sk_buff *skb)
 {
-	struct bw_vars *bw_vars;
-	struct icmp_packet_bw *icmp_packet;
+	struct batadv_bw_vars *bw_vars;
+	struct batadv_icmp_packet_bw *icmp_packet;
 	struct batadv_socket_client *socket_client;
 	unsigned int timeout = BW_CLEAN_RECEIVER_TIMEOUT;
 	socket_client = container_of(&bat_priv,
 				     struct batadv_socket_client, bat_priv);
 
-	icmp_packet = (struct icmp_packet_bw *)skb->data;
+	icmp_packet = (struct batadv_icmp_packet_bw *)skb->data;
 
 	/* search/initialize bw_vars struct */
 	spin_lock_bh(&bat_priv->bw_list_lock);
@@ -173,7 +173,7 @@ void batadv_bw_meter_received(struct batadv_priv *bat_priv, struct sk_buff *skb)
 			spin_unlock_bh(&bat_priv->bw_list_lock);
 			goto out;
 		}
-		bw_vars = kmalloc(sizeof(struct bw_vars), GFP_ATOMIC);
+		bw_vars = kmalloc(sizeof(*bw_vars), GFP_ATOMIC);
 		if (!bw_vars) {
 			batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
 				   "Meter: meter_received cannot allocate bw_vars\n");
@@ -248,10 +248,10 @@ out:
  * according to next_to_send and (window_first + BW_WINDOW_SIZE)
  */
 static int batadv_bw_multiple_send(struct batadv_priv *bat_priv,
-				   struct bw_vars *bw_vars)
+				   struct batadv_bw_vars *bw_vars)
 {
 	struct sk_buff *skb;
-	struct icmp_packet_bw *icmp_to_send;
+	struct batadv_icmp_packet_bw *icmp_to_send;
 	int ret = -1, bw_packet_len = BW_PACKET_LEN, next_to_send;
 	struct batadv_socket_client *socket_client =
 		container_of(&bat_priv, struct batadv_socket_client, bat_priv);
@@ -283,14 +283,14 @@ static int batadv_bw_multiple_send(struct batadv_priv *bat_priv,
 
 		/* TODO redefine BW_PACKET_LEN */
 		skb_reserve(skb, ETH_HLEN);
-		icmp_to_send = (struct icmp_packet_bw *)skb_put(skb,
-								bw_packet_len);
+		icmp_to_send = (struct batadv_icmp_packet_bw *)
+					skb_put(skb, bw_packet_len);
 
 		/* fill the icmp header */
 		memcpy(&icmp_to_send->dst, &bw_vars->other_end, ETH_ALEN);
 		icmp_to_send->header.version = BATADV_COMPAT_VERSION;
 		icmp_to_send->header.packet_type = BATADV_ICMP;
-		icmp_to_send->msg_type = BW_METER;
+		icmp_to_send->msg_type = BATADV_BW_METER;
 		icmp_to_send->seqno = next_to_send;
 		icmp_to_send->uid = socket_client->index;
 
@@ -310,8 +310,9 @@ out:
 void batadv_bw_ack_received(struct batadv_priv *bat_priv,
 			    struct sk_buff *skb)
 {
-	struct icmp_packet_bw *icmp_packet = (struct icmp_packet_bw *)skb->data;
-	struct bw_vars *bw_vars;
+	struct batadv_icmp_packet_bw *icmp_packet =
+		(struct batadv_icmp_packet_bw *)skb->data;
+	struct batadv_bw_vars *bw_vars;
 
 	/* find the bw_vars */
 	spin_lock_bh(&bat_priv->bw_list_lock);
@@ -340,15 +341,15 @@ static void batadv_bw_worker(struct work_struct *work)
 {
 	struct delayed_work *delayed_work =
 		container_of(work, struct delayed_work, work);
-	struct bw_vars *bw_vars =
-		container_of(delayed_work, struct bw_vars, bw_work);
+	struct batadv_bw_vars *bw_vars =
+		container_of(delayed_work, struct batadv_bw_vars, bw_work);
 	struct batadv_priv *bat_priv = bw_vars->bat_priv;
 	unsigned long int test_time, total_bytes, throughput;
 
 	spin_lock_bh(&bw_vars->bw_vars_lock);
 	/* if timedout, resend whole window */
 	if (batadv_has_timed_out(bw_vars->last_sent_time, BW_TIMEOUT)) {
-		pr_info("RESENDING WHOLE WINDOW\n");
+		pr_info("RESENDING WHOLE WINDOW %d\n", bw_vars->window_first);
 		bw_vars->next_to_send = bw_vars->window_first;
 		spin_unlock_bh(&bw_vars->bw_vars_lock);
 		batadv_bw_multiple_send(bat_priv, bw_vars);
@@ -372,16 +373,16 @@ static void batadv_bw_worker(struct work_struct *work)
 }
 
 void batadv_bw_start(struct batadv_priv *bat_priv,
-		     struct icmp_packet_bw *icmp_packet_bw)
+		     struct batadv_icmp_packet_bw *icmp_packet_bw)
 {
-	struct bw_vars *bw_vars;
+	struct batadv_bw_vars *bw_vars;
 
 	/* find/initialize bw_vars */
 	spin_lock_bh(&bat_priv->bw_list_lock);
 	bw_vars = batadv_bw_list_find(bat_priv, &icmp_packet_bw->dst);
 
 	if (!bw_vars) {
-		bw_vars = kmalloc(sizeof(struct bw_vars), GFP_ATOMIC);
+		bw_vars = kmalloc(sizeof(*bw_vars), GFP_ATOMIC);
 		if (!bw_vars) {
 			batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
 				   "Meter: batadv_bw_start cannot allocate list elements\n");

@@ -164,13 +164,13 @@ enum batadv_counters {
 	BATADV_CNT_NUM,
 };
 
-enum bw_meter_status {
+enum batadv_bw_status {
 	INACTIVE,
 	RECEIVER,
 	SENDER,
 };
 
-struct bw_vars {
+struct batadv_bw_vars {
 	struct list_head list;
 	struct delayed_work bw_work;
 	struct batadv_priv *bat_priv;
@@ -186,7 +186,7 @@ struct bw_vars {
 	uint16_t next_to_send;
 	uint16_t window_first;
 	uint8_t other_end[ETH_ALEN];
-	uint8_t status; /* see bm_meter_status */
+	uint8_t status; /* see batadv_bw_status */
 	unsigned long start_time;
 	unsigned long last_sent_time;
 };

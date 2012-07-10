@@ -154,7 +154,7 @@ static ssize_t batadv_socket_write(struct file *file, const char __user *buff,
 	struct batadv_hard_iface *primary_if = NULL;
 	struct sk_buff *skb;
 	struct batadv_icmp_packet_rr *icmp_packet;
-	struct icmp_packet_bw icmp_packet_bw;
+	struct batadv_icmp_packet_bw icmp_packet_bw;
 
 	struct batadv_orig_node *orig_node = NULL;
 	struct batadv_neigh_node *neigh_node = NULL;
@@ -173,9 +173,10 @@ static ssize_t batadv_socket_write(struct file *file, const char __user *buff,
 		goto out;
 	}
 
-	if (len == sizeof(struct icmp_packet_bw)) {
+	if (len == sizeof(struct batadv_icmp_packet_bw)) {
 		if (copy_from_user(&icmp_packet_bw,
-				   buff, sizeof(struct icmp_packet_bw))) {
+				   buff,
+				   sizeof(struct batadv_icmp_packet_bw))) {
 			len = -EFAULT;
 			goto out;
 		}
