@@ -14,7 +14,8 @@
 #define BW_TIMEOUT 800
 #define BW_WORKER_TIMEOUT (BW_TIMEOUT/10)
 
-static int batadv_send_icmp(struct batadv_priv *bat_priv, struct sk_buff *skb)
+static int batadv_bw_icmp_send(struct batadv_priv *bat_priv,
+			       struct sk_buff *skb)
 {
 	struct batadv_hard_iface *primary_if = NULL;
 	struct batadv_orig_node *orig_node = NULL;
@@ -26,12 +27,12 @@ static int batadv_send_icmp(struct batadv_priv *bat_priv, struct sk_buff *skb)
 	primary_if = batadv_primary_if_get_selected(bat_priv);
 	if (!primary_if) {
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
-			   "Meter:send_icmp_packet: no primary if\n");
+			   "Meter:batadv_bw_icmp_send: no primary if\n");
 		goto out;
 	}
 	if (atomic_read(&bat_priv->mesh_state) != BATADV_MESH_ACTIVE) {
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
-			   "Meter:send_icmp_packet: mesh inactive\n");
+			   "Meter:batadv_bw_icmp_send: mesh inactive\n");
 		goto dst_unreach;
 	}
 
@@ -39,26 +40,26 @@ static int batadv_send_icmp(struct batadv_priv *bat_priv, struct sk_buff *skb)
 					  icmp_packet->dst);
 	if (!orig_node) {
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
-			   "Meter:send_icmp_packet: no orig node\n");
+			   "Meter:batadv_bw_icmp_send: no orig node\n");
 		goto dst_unreach;
 	}
 
 	neigh_node = batadv_orig_node_get_router(orig_node);
 	if (!neigh_node) {
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
-			   "Meter:send_icmp_packet: no neigh node\n");
+			   "Meter:batadv_bw_icmp_send: no neigh node\n");
 		goto dst_unreach;
 	}
 
 	if (!neigh_node->if_incoming) {
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
-			   "Meter:send_icmp_packet: no if incoming\n");
+			   "Meter:batadv_bw_icmp_send: no if incoming\n");
 		goto dst_unreach;
 	}
 
 	if (neigh_node->if_incoming->if_status != BATADV_IF_ACTIVE) {
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
-			   "Meter:send_icmp_packet: status not IF_ACTIVE\n");
+			   "Meter:batadv_bw_icmp_send: status not IF_ACTIVE\n");
 		goto dst_unreach;
 	}
 
@@ -74,7 +75,7 @@ dst_unreach:
 	/* TODO not in .h
 	icmp_to_send->msg_type = DESTINATION_UNREACHABLE;
 	batadv_socket_add_packet(socket_client, icmp_to_send, packet_len);
-	*/
+	 */
 
 out:
 	if (primary_if)
@@ -99,7 +100,7 @@ static struct bw_vars *batadv_bw_list_find(struct batadv_priv *bat_priv,
 	return NULL;
 }
 
-static int batadv_bw_send_ack(struct batadv_socket_client *socket_client,
+static int batadv_bw_ack_send(struct batadv_socket_client *socket_client,
 			      struct batadv_icmp_packet *icmp_packet,  int seq)
 {
 	struct sk_buff *skb;
@@ -127,7 +128,7 @@ static int batadv_bw_send_ack(struct batadv_socket_client *socket_client,
 	icmp_ack->uid = socket_client->index;
 
 	/* send the ack */
-	if (batadv_send_icmp(bat_priv, skb) < 0) {
+	if (batadv_bw_icmp_send(bat_priv, skb) < 0) {
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
 			   "Meter: batadv_send_bw_ack cannot send_icmp_packet\n");
 		goto out;
@@ -145,7 +146,7 @@ static void batadv_bw_receiver_clean(struct work_struct *work)
 		container_of(delayed_work, struct bw_vars, bw_work);
 
 	/* TODO deallocate struct */
-	printk(KERN_INFO "test finished\n");
+	pr_info("test finished\n");
 	spin_lock_bh(&bw_vars->bw_vars_lock);
 	bw_vars->status = INACTIVE;
 	spin_unlock_bh(&bw_vars->bw_vars_lock);
@@ -156,6 +157,7 @@ void batadv_bw_meter_received(struct batadv_priv *bat_priv, struct sk_buff *skb)
 	struct bw_vars *bw_vars;
 	struct icmp_packet_bw *icmp_packet;
 	struct batadv_socket_client *socket_client;
+	unsigned int timeout = BW_CLEAN_RECEIVER_TIMEOUT;
 	socket_client = container_of(&bat_priv,
 				     struct batadv_socket_client, bat_priv);
 
@@ -223,8 +225,8 @@ void batadv_bw_meter_received(struct batadv_priv *bat_priv, struct sk_buff *skb)
 		bw_vars->window_first++;
 		spin_unlock_bh(&bw_vars->bw_vars_lock);
 
-		batadv_bw_send_ack(socket_client,
-				   (struct batadv_icmp_packet *) icmp_packet,
+		batadv_bw_ack_send(socket_client,
+				   (struct batadv_icmp_packet *)icmp_packet,
 				   icmp_packet->seqno);
 
 		/* check for last packet */
@@ -233,24 +235,29 @@ void batadv_bw_meter_received(struct batadv_priv *bat_priv, struct sk_buff *skb)
 					  batadv_bw_receiver_clean);
 			queue_delayed_work(batadv_event_workqueue,
 					   &bw_vars->bw_work,
-					   msecs_to_jiffies(
-					   BW_CLEAN_RECEIVER_TIMEOUT));
+					   msecs_to_jiffies(timeout));
 		}
-	} else
+	} else {
 		spin_unlock_bh(&bw_vars->bw_vars_lock);
+	}
 out:
 	return;
 }
 
-/* sends packets from next_to_send to (window_first+BW_WINDOW_SIZE) */
-static int batadv_send_remaining_window(struct batadv_priv *bat_priv,
-					struct bw_vars *bw_vars)
+/* Sends all packets that belongs to the window and have not been sent yet
+ * according to next_to_send and (window_first + BW_WINDOW_SIZE)
+ */
+static int batadv_bw_multiple_send(struct batadv_priv *bat_priv,
+				   struct bw_vars *bw_vars)
 {
 	struct sk_buff *skb;
 	struct icmp_packet_bw *icmp_to_send;
 	int ret = -1, bw_packet_len = BW_PACKET_LEN, next_to_send;
 	struct batadv_socket_client *socket_client =
 		container_of(&bat_priv, struct batadv_socket_client, bat_priv);
+
+	if (!spin_trylock(&bw_vars->bw_send_lock))
+		goto out;
 
 	while (1) {
 		spin_lock_bh(&bw_vars->bw_ack_lock);
@@ -270,7 +277,7 @@ static int batadv_send_remaining_window(struct batadv_priv *bat_priv,
 		skb = dev_alloc_skb(bw_packet_len + ETH_HLEN);
 		if (!skb) {
 			batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
-				   "Meter: send_remaining_window() cannot allocate skb\n");
+				   "Meter: batadv_bw_multiple_send() cannot allocate skb\n");
 			goto out;
 		}
 
@@ -287,9 +294,9 @@ static int batadv_send_remaining_window(struct batadv_priv *bat_priv,
 		icmp_to_send->seqno = next_to_send;
 		icmp_to_send->uid = socket_client->index;
 
-		if (batadv_send_icmp(bat_priv, skb) < 0) {
+		if (batadv_bw_icmp_send(bat_priv, skb) < 0) {
 			batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
-				   "Meter: send_remaining_window cannot send_icmp_packet\n");
+				   "Meter: batadv_bw_multiple_send() cannot send_icmp_packet\n");
 			goto out;
 		}
 
@@ -301,7 +308,7 @@ out:
 }
 
 void batadv_bw_ack_received(struct batadv_priv *bat_priv,
-				   struct sk_buff *skb)
+			    struct sk_buff *skb)
 {
 	struct icmp_packet_bw *icmp_packet = (struct icmp_packet_bw *)skb->data;
 	struct bw_vars *bw_vars;
@@ -323,12 +330,8 @@ void batadv_bw_ack_received(struct batadv_priv *bat_priv,
 	    (icmp_packet->seqno < bw_vars->window_first + BW_WINDOW_SIZE))
 		bw_vars->window_first = icmp_packet->seqno + 1;
 
-	if (spin_trylock(&bw_vars->bw_send_lock)) {
-		spin_unlock_bh(&bw_vars->bw_ack_lock);
-		batadv_send_remaining_window(bat_priv, bw_vars);
-	} else {
-		spin_unlock_bh(&bw_vars->bw_ack_lock);
-	}
+	spin_unlock_bh(&bw_vars->bw_ack_lock);
+	batadv_bw_multiple_send(bat_priv, bw_vars);
 out:
 	return;
 }
@@ -345,10 +348,10 @@ static void batadv_bw_worker(struct work_struct *work)
 	spin_lock_bh(&bw_vars->bw_vars_lock);
 	/* if timedout, resend whole window */
 	if (batadv_has_timed_out(bw_vars->last_sent_time, BW_TIMEOUT)) {
-		printk(KERN_INFO "RESENDING WHOLE WINDOW\n");
+		pr_info("RESENDING WHOLE WINDOW\n");
 		bw_vars->next_to_send = bw_vars->window_first;
 		spin_unlock_bh(&bw_vars->bw_vars_lock);
-		batadv_send_remaining_window(bat_priv, bw_vars);
+		batadv_bw_multiple_send(bat_priv, bw_vars);
 		spin_lock_bh(&bw_vars->bw_vars_lock);
 	}
 
@@ -362,14 +365,14 @@ static void batadv_bw_worker(struct work_struct *work)
 		total_bytes = bw_vars->total_to_send * BW_PACKET_LEN;
 		throughput = total_bytes / test_time * 1000;
 
-		printk(KERN_INFO "Meter: test over in %lu ms.\nMeter: sent %lu bytes.\nThroughput %lu B/s",
-		       test_time, total_bytes, throughput);
+		pr_info("Meter: test over in %lu ms.\nMeter: sent %lu bytes.\nThroughput %lu B/s",
+			test_time, total_bytes, throughput);
 	}
 	spin_unlock_bh(&bw_vars->bw_vars_lock);
 }
 
 void batadv_bw_start(struct batadv_priv *bat_priv,
-		    struct icmp_packet_bw *icmp_packet_bw)
+		     struct icmp_packet_bw *icmp_packet_bw)
 {
 	struct bw_vars *bw_vars;
 
@@ -413,12 +416,7 @@ void batadv_bw_start(struct batadv_priv *bat_priv,
 	INIT_DELAYED_WORK(&bw_vars->bw_work, batadv_bw_worker);
 	queue_delayed_work(batadv_event_workqueue, &bw_vars->bw_work,
 			   msecs_to_jiffies(BW_TIMEOUT));
-	if (spin_trylock(&bw_vars->bw_send_lock))
-		batadv_send_remaining_window(bat_priv, bw_vars);
-	else{
-		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
-			   "Meter: cannot lock send, aborting\n");
-	}
+	batadv_bw_multiple_send(bat_priv, bw_vars);
 out:
 	return;
 }

@@ -174,18 +174,19 @@ struct bw_vars {
 	struct list_head list;
 	struct delayed_work bw_work;
 	struct batadv_priv *bat_priv;
-	/*lock used in receiver*/
+	/* lock used in receiver */
 	spinlock_t bw_vars_lock;
-	/*locks used in sender*/
+	/* locks used in sender */
 	spinlock_t bw_ack_lock;
+	/* lock the call of batadv_bw_multiple_send */
 	spinlock_t bw_send_lock;
-	/*total data to send OR window data received*/
+	/* total data to send OR window data received */
 	uint16_t total_to_send;
-	/*offset of the first window packet*/
+	/* offset of the first window packet */
 	uint16_t next_to_send;
 	uint16_t window_first;
 	uint8_t other_end[ETH_ALEN];
-	uint8_t status; /*see bm_meter_status*/
+	uint8_t status; /* see bm_meter_status */
 	unsigned long start_time;
 	unsigned long last_sent_time;
 };
