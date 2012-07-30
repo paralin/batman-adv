@@ -350,7 +350,7 @@ void batadv_bw_ack_received(struct batadv_priv *bat_priv,
 	}
 
 	//spin_unlock_bh(&bw_vars->bw_ack_lock);
-	//batadv_bw_multiple_send(bat_priv, bw_vars);
+	batadv_bw_multiple_send(bat_priv, bw_vars);
 out:
 	return;
 }
@@ -449,12 +449,10 @@ void batadv_bw_start(struct batadv_priv *bat_priv,
 	//spin_unlock_bh(&bat_priv->bw_list_lock);
 
 	printk ("starting worker. bw_vars->last_sent_time = %lu\n", bw_vars->last_sent_time);
-	/*
 	if (batadv_bw_queue_delayed_work(bw_vars) == 0){
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
 			   "Meter: batadv_bw_start work already enqueued\n");
 	}
-	*/
 
 	/* start worker */
 	batadv_bw_multiple_send(bat_priv, bw_vars);
