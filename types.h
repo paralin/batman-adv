@@ -236,11 +236,13 @@ struct batadv_bw_vars {
 	struct list_head list;
 	struct delayed_work bw_work;
 	struct batadv_priv *bat_priv;
+	struct batadv_socket_client *socket_client;
 	/* lock used in receiver */
 	spinlock_t bw_vars_lock;
 	/* locks used in sender */
 	spinlock_t bw_ack_lock;
-	spinlock_t bw_send_lock;	/* protects multiple_send calls */
+	/* protects multiple_send calls */
+	spinlock_t bw_send_lock;	
 	/* total data to send OR window data received */
 	uint16_t total_to_send;
 	/* offset of the first window packet */

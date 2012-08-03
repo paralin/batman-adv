@@ -148,10 +148,11 @@ out:
 
 static void batadv_bw_receiver_clean(struct work_struct *work)
 {
-	struct delayed_work *delayed_work =
-		container_of(work, struct delayed_work, work);
-	struct batadv_bw_vars *bw_vars =
-		container_of(delayed_work, struct batadv_bw_vars, bw_work);
+	struct delayed_work *delayed_work;
+	struct batadv_bw_vars *bw_vars;
+
+	delayed_work = container_of(work, struct delayed_work, work);
+	bw_vars = container_of(delayed_work, struct batadv_bw_vars, bw_work);
 
 	pr_info("test finished\n");
 	batadv_bw_vars_free(bw_vars);
@@ -228,6 +229,7 @@ void batadv_bw_meter_received(struct batadv_priv *bat_priv, struct sk_buff *skb)
 
 		/* check for the last packet */
 		if (skb->len < BW_PACKET_LEN) {
+			printk("last packet%d\n", icmp_packet->seqno);
 			INIT_DELAYED_WORK(&bw_vars->bw_work,
 					  batadv_bw_receiver_clean);
 			queue_delayed_work(batadv_event_workqueue,
@@ -259,7 +261,7 @@ static int batadv_bw_multiple_send(struct batadv_priv *bat_priv,
 	while (1) {
 		spin_lock_bh(&bw_vars->bw_ack_lock);
 		if (bw_vars->next_to_send >=
-		    min(bw_vars->window_first + BW_WINDOW_SIZE,
+		    min((uint16_t) (bw_vars->window_first + BW_WINDOW_SIZE),
 			bw_vars->total_to_send)) {
 			spin_unlock(&bw_vars->bw_send_lock);
 			spin_unlock_bh(&bw_vars->bw_ack_lock);
@@ -342,43 +344,45 @@ out:
 
 static void batadv_bw_worker(struct work_struct *work)
 {
-	struct delayed_work *delayed_work =
-		container_of(work, struct delayed_work, work);
-	struct batadv_bw_vars *bw_vars =
-		container_of(delayed_work, struct batadv_bw_vars, bw_work);
-	struct batadv_priv *bat_priv = bw_vars->bat_priv;
-	unsigned long int test_time, total_bytes, throughput;
+	struct delayed_work *delayed_work;
+	struct batadv_bw_vars *bw_vars;
+	struct batadv_priv *bat_priv;
+	struct batadv_bw_result *result;
+	struct batadv_icmp_packet_rr *icmp_packet_rr;
 
-	spin_lock_bh(&bw_vars->bw_vars_lock);
+	delayed_work = container_of(work, struct delayed_work, work);
+	bw_vars = container_of(delayed_work, struct batadv_bw_vars, bw_work);
+	bat_priv = bw_vars->bat_priv;
+
 	/* if timedout, resend whole window */
 	if (batadv_has_timed_out(bw_vars->last_sent_time, BW_TIMEOUT)) {
 		pr_info("RESENDING WHOLE WINDOW %d\n", bw_vars->window_first);
 		bw_vars->next_to_send = bw_vars->window_first;
-		spin_unlock_bh(&bw_vars->bw_vars_lock);
 		batadv_bw_multiple_send(bat_priv, bw_vars);
-		spin_lock_bh(&bw_vars->bw_vars_lock);
 	}
 
-	/* if not finished, re-enqueue worker */
 	if (bw_vars->window_first < bw_vars->total_to_send) {
+		/* if not finished, re-enqueue worker */
+		INIT_DELAYED_WORK(&bw_vars->bw_work, batadv_bw_worker);
 		queue_delayed_work(batadv_event_workqueue, &bw_vars->bw_work,
 				   msecs_to_jiffies(BW_WORKER_TIMEOUT));
 	} else {
-		test_time = ((long)jiffies - (long)bw_vars->start_time) *
-			    (1000/HZ);
-		total_bytes = bw_vars->total_to_send * BW_PACKET_LEN;
-		throughput = total_bytes / test_time * 1000;
-
-		pr_info("Meter: test over in %lu ms.\nMeter: sent %lu bytes.\nThroughput %lu B/s\n",
-			test_time, total_bytes, throughput);
+		/* send the answer to batctl */
+		icmp_packet_rr = kmalloc(sizeof(*icmp_packet_rr), GFP_ATOMIC);
+		icmp_packet_rr->uid = bw_vars->socket_client->index;
+		result = (struct batadv_bw_result *)icmp_packet_rr;
+		result->test_time = ((long)jiffies -
+				     (long)bw_vars->start_time) * (1000/HZ);
+		result->total_bytes = bw_vars->total_to_send * BW_PACKET_LEN;
+		batadv_socket_receive_packet(icmp_packet_rr, sizeof(*icmp_packet_rr));
 		batadv_bw_vars_free(bw_vars);
 	}
-	spin_unlock_bh(&bw_vars->bw_vars_lock);
 }
 
-void batadv_bw_start(struct batadv_priv *bat_priv,
+void batadv_bw_start(struct batadv_socket_client *socket_client,
 		     struct batadv_icmp_packet_bw *icmp_packet_bw)
 {
+	struct batadv_priv *bat_priv = socket_client->bat_priv;
 	struct batadv_bw_vars *bw_vars;
 
 	/* find bw_vars */
@@ -406,6 +410,7 @@ void batadv_bw_start(struct batadv_priv *bat_priv,
 	bw_vars->next_to_send = 0;
 	bw_vars->window_first = 0;
 	bw_vars->bat_priv = bat_priv;
+	bw_vars->socket_client = socket_client;
 	bw_vars->last_sent_time = jiffies;
 	bw_vars->start_time = jiffies;
 	spin_lock_init(&bw_vars->bw_ack_lock);
