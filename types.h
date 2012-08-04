@@ -240,9 +240,7 @@ struct batadv_bw_vars {
 	/* lock used in receiver */
 	spinlock_t bw_vars_lock;
 	/* locks used in sender */
-	spinlock_t bw_ack_lock;
-	/* protects multiple_send calls */
-	spinlock_t bw_send_lock;	
+	spinlock_t bw_window_first_lock;
 	/* total data to send OR window data received */
 	uint16_t total_to_send;
 	/* offset of the first window packet */

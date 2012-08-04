@@ -9,7 +9,7 @@
 #include "bw_meter.h"
 
 #define BW_PACKET_LEN 1000
-#define BW_WINDOW_SIZE 220
+#define BW_WINDOW_SIZE 620
 #define BW_CLEAN_RECEIVER_TIMEOUT 2000
 #define BW_TIMEOUT 400
 #define BW_WORKER_TIMEOUT (BW_TIMEOUT/10)
@@ -254,30 +254,22 @@ static int batadv_bw_multiple_send(struct batadv_priv *bat_priv,
 	int ret = -1, bw_packet_len = BW_PACKET_LEN, next_to_send;
 	struct batadv_socket_client *socket_client =
 		container_of(&bat_priv, struct batadv_socket_client, bat_priv);
+	uint16_t window_end;
 
-	if (!spin_trylock(&bw_vars->bw_send_lock))
-		goto out;
+	spin_lock_bh(&bw_vars->bw_window_first_lock);
+	window_end = min((uint16_t) (bw_vars->window_first + BW_WINDOW_SIZE),
+		bw_vars->total_to_send);
+	spin_unlock_bh(&bw_vars->bw_window_first_lock);
 
-	while (1) {
-		spin_lock_bh(&bw_vars->bw_ack_lock);
-		if (bw_vars->next_to_send >=
-		    min((uint16_t) (bw_vars->window_first + BW_WINDOW_SIZE),
-			bw_vars->total_to_send)) {
-			spin_unlock(&bw_vars->bw_send_lock);
-			spin_unlock_bh(&bw_vars->bw_ack_lock);
-			break;
-		}
-		spin_unlock_bh(&bw_vars->bw_ack_lock);
-		next_to_send = bw_vars->next_to_send++;
+	while (bw_vars->next_to_send < window_end) {
 
-		if (bw_vars->next_to_send == bw_vars->total_to_send)
+		if (bw_vars->next_to_send == bw_vars->total_to_send -1)
 			bw_packet_len -= 1;
 
 		skb = dev_alloc_skb(bw_packet_len + ETH_HLEN);
 		if (!skb) {
 			batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
 				   "Meter: batadv_bw_multiple_send() cannot allocate skb\n");
-			spin_unlock(&bw_vars->bw_send_lock);
 			goto out;
 		}
 
@@ -291,16 +283,16 @@ static int batadv_bw_multiple_send(struct batadv_priv *bat_priv,
 		icmp_to_send->header.version = BATADV_COMPAT_VERSION;
 		icmp_to_send->header.packet_type = BATADV_ICMP;
 		icmp_to_send->msg_type = BATADV_BW_METER;
-		icmp_to_send->seqno = next_to_send;
+		icmp_to_send->seqno = bw_vars->next_to_send;
 		icmp_to_send->uid = socket_client->index;
 
 		if (batadv_bw_icmp_send(bat_priv, skb) < 0) {
 			batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
 				   "Meter: batadv_bw_multiple_send() cannot send_icmp_packet\n");
-			spin_unlock(&bw_vars->bw_send_lock);
 			goto out;
 		}
 
+		bw_vars->next_to_send+=1;
 		bw_vars->last_sent_time = jiffies;
 	}
 	ret = 0;
@@ -327,17 +319,17 @@ void batadv_bw_ack_received(struct batadv_priv *bat_priv,
 	}
 
 	/* slide and send fresh packets */
-	spin_lock_bh(&bw_vars->bw_ack_lock);
+	spin_lock_bh(&bw_vars->bw_window_first_lock);
 	if ((bw_vars->window_first <= icmp_packet->seqno) &&
 	    (icmp_packet->seqno < bw_vars->window_first + BW_WINDOW_SIZE)) {
 		bw_vars->window_first = icmp_packet->seqno + 1;
+		spin_unlock_bh(&bw_vars->bw_window_first_lock);
 	} else {
+		spin_unlock_bh(&bw_vars->bw_window_first_lock);
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
 			   "Meter: received unespected ack\n");
 	}
 
-	spin_unlock_bh(&bw_vars->bw_ack_lock);
-	batadv_bw_multiple_send(bat_priv, bw_vars);
 out:
 	return;
 }
@@ -354,18 +346,15 @@ static void batadv_bw_worker(struct work_struct *work)
 	bw_vars = container_of(delayed_work, struct batadv_bw_vars, bw_work);
 	bat_priv = bw_vars->bat_priv;
 
-	/* if timedout, resend whole window */
-	if (batadv_has_timed_out(bw_vars->last_sent_time, BW_TIMEOUT)) {
-		pr_info("RESENDING WHOLE WINDOW %d\n", bw_vars->window_first);
-		bw_vars->next_to_send = bw_vars->window_first;
-		batadv_bw_multiple_send(bat_priv, bw_vars);
-	}
-
 	if (bw_vars->window_first < bw_vars->total_to_send) {
-		/* if not finished, re-enqueue worker */
+		/*resend whole window */
+		bw_vars->next_to_send = bw_vars->window_first;
+
+		/* re-enqueue worker */
 		INIT_DELAYED_WORK(&bw_vars->bw_work, batadv_bw_worker);
 		queue_delayed_work(batadv_event_workqueue, &bw_vars->bw_work,
 				   msecs_to_jiffies(BW_WORKER_TIMEOUT));
+		batadv_bw_multiple_send(bat_priv, bw_vars);
 	} else {
 		/* send the answer to batctl */
 		icmp_packet_rr = kmalloc(sizeof(*icmp_packet_rr), GFP_ATOMIC);
@@ -413,16 +402,14 @@ void batadv_bw_start(struct batadv_socket_client *socket_client,
 	bw_vars->socket_client = socket_client;
 	bw_vars->last_sent_time = jiffies;
 	bw_vars->start_time = jiffies;
-	spin_lock_init(&bw_vars->bw_ack_lock);
-	spin_lock_init(&bw_vars->bw_send_lock);
+	spin_lock_init(&bw_vars->bw_window_first_lock);
 	list_add(&bw_vars->list, &bat_priv->bw_list);
 	spin_unlock_bh(&bat_priv->bw_list_lock);
 
 	/* start worker */
 	INIT_DELAYED_WORK(&bw_vars->bw_work, batadv_bw_worker);
 	queue_delayed_work(batadv_event_workqueue, &bw_vars->bw_work,
-			   msecs_to_jiffies(BW_TIMEOUT));
-	batadv_bw_multiple_send(bat_priv, bw_vars);
+			   msecs_to_jiffies(BW_WORKER_TIMEOUT));
 out:
 	return;
 }
