@@ -238,23 +238,22 @@ struct batadv_bw_vars {
 	struct delayed_work bw_work;
 	struct batadv_priv *bat_priv;
 	struct batadv_socket_client *socket_client;
-	/* lock used in receiver */
-	spinlock_t bw_vars_lock;
-	/* locks used in sender */
-	spinlock_t bw_window_first_lock;
-	/* protects multiple_send calls */
-	spinlock_t bw_send_lock;
-	/* total data to send OR window data received */
-	uint32_t total_to_send;
-	/* offset of the first window packet */
-	uint16_t next_to_send;
-	uint32_t window_first;
-	uint8_t other_end[ETH_ALEN];
-	uint8_t status; /* see bm_meter_status */
+	/* bitmap */
+	unsigned long *bw_bits;
 	unsigned long start_time;
 	unsigned long last_sent_time;
-	uint8_t retry_number;
+	uint32_t total_to_send;
+	uint32_t window_first;
+	uint16_t next_to_send;
 	uint16_t last_resent_window;
+	uint16_t bit_first;
+	uint8_t other_end[ETH_ALEN];
+	uint8_t status; /* see bm_meter_status */
+	uint8_t retry_number;
+	/* lock used in receiver */
+	spinlock_t bw_vars_lock;
+	/* protects multiple_send calls */
+	spinlock_t bw_send_lock;
 };
 
 struct batadv_priv {
