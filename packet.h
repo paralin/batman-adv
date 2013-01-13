@@ -144,6 +144,7 @@ enum batadv_tvlv_type {
 	BATADV_TVLV_NC		= 0x03,
 	BATADV_TVLV_TT		= 0x04,
 	BATADV_TVLV_ROAM	= 0x05,
+	BATADV_TVLV_HLP		= 0x06,
 };
 
 /* the destination hardware field in the ARP frame is used to
@@ -176,7 +177,7 @@ struct batadv_ogm_packet {
 	__be32   seqno;
 	uint8_t  orig[ETH_ALEN];
 	uint8_t  prev_sender[ETH_ALEN];
-	uint8_t  reserved;
+	uint8_t  helper_num;
 	uint8_t  tq;
 	__be16   tvlv_len;
 	/* __packed is not needed as the struct size is divisible by 4,
@@ -414,6 +415,12 @@ struct batadv_tvlv_tt_change {
 struct batadv_tvlv_roam_adv {
 	uint8_t  client[ETH_ALEN];
 	uint16_t reserved;
+};
+
+struct batadv_helper_info {
+	uint8_t addr[ETH_ALEN];
+	uint8_t tq_total;
+	uint8_t tq_second_hop;
 };
 
 #endif /* _NET_BATMAN_ADV_PACKET_H_ */

@@ -29,6 +29,7 @@
 #include "bridge_loop_avoidance.h"
 #include "network-coding.h"
 #include "fragmentation.h"
+#include "helper.h"
 
 /* hash class keys */
 static struct lock_class_key batadv_orig_hash_lock_class_key;
@@ -126,6 +127,9 @@ static void batadv_orig_node_free_rcu(struct rcu_head *rcu)
 	orig_node = container_of(rcu, struct batadv_orig_node, rcu);
 
 	spin_lock_bh(&orig_node->neigh_list_lock);
+
+	/* free one_hops */
+	batadv_hlp_free_orig(orig_node, NULL);
 
 	/* for all bonding members ... */
 	list_for_each_entry_safe(neigh_node, tmp_neigh_node,
@@ -241,6 +245,12 @@ struct batadv_orig_node *batadv_get_orig_node(struct batadv_priv *bat_priv,
 	spin_lock_init(&orig_node->tt_buff_lock);
 
 	batadv_nc_init_orig(orig_node);
+
+#ifdef CONFIG_BATMAN_ADV_HELPER
+	INIT_HLIST_HEAD(&orig_node->one_hops);
+	spin_lock_init(&orig_node->one_hops_lock);
+	orig_node->one_hops_count = 0;
+#endif
 
 	/* extra reference for return */
 	atomic_set(&orig_node->refcount, 2);
@@ -400,6 +410,9 @@ static void _batadv_purge_orig(struct batadv_priv *bat_priv)
 
 			batadv_frag_purge_orig(orig_node,
 					       batadv_frag_check_entry);
+
+			batadv_hlp_free_orig(orig_node,
+					     batadv_hlp_check_one_hop);
 		}
 		spin_unlock_bh(list_lock);
 	}

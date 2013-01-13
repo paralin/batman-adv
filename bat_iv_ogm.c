@@ -27,6 +27,7 @@
 #include "send.h"
 #include "bat_algo.h"
 #include "network-coding.h"
+#include "helper.h"
 
 /**
  * batadv_ring_buffer_set - update the ring buffer with the given value
@@ -118,7 +119,7 @@ static int batadv_iv_ogm_iface_enable(struct batadv_hard_iface *hard_iface)
 	batadv_ogm_packet->header.version = BATADV_COMPAT_VERSION;
 	batadv_ogm_packet->header.ttl = 2;
 	batadv_ogm_packet->flags = BATADV_NO_FLAGS;
-	batadv_ogm_packet->reserved = 0;
+	batadv_ogm_packet->helper_num = 0;
 	batadv_ogm_packet->tq = BATADV_TQ_MAX_VALUE;
 
 	res = 0;
@@ -189,12 +190,13 @@ static uint8_t batadv_hop_penalty(uint8_t tq,
 
 /* is there another aggregated packet here? */
 static int batadv_iv_ogm_aggr_packet(int buff_pos, int packet_len,
-				     __be16 tvlv_len)
+				     __be16 tvlv_len, int helper_num)
 {
 	int next_buff_pos = 0;
 
 	next_buff_pos += buff_pos + BATADV_OGM_HLEN;
 	next_buff_pos += ntohs(tvlv_len);
+	next_buff_pos += batadv_hlp_len(helper_num);
 
 	return (next_buff_pos <= packet_len) &&
 	       (next_buff_pos <= BATADV_MAX_AGGREGATION_BYTES);
@@ -222,7 +224,8 @@ static void batadv_iv_ogm_send_to_if(struct batadv_forw_packet *forw_packet,
 
 	/* adjust all flags and log packets */
 	while (batadv_iv_ogm_aggr_packet(buff_pos, forw_packet->packet_len,
-					 batadv_ogm_packet->tvlv_len)) {
+					 batadv_ogm_packet->tvlv_len,
+					 batadv_ogm_packet->helper_num)) {
 		/* we might have aggregated direct link packets with an
 		 * ordinary base packet
 		 */
@@ -250,6 +253,7 @@ static void batadv_iv_ogm_send_to_if(struct batadv_forw_packet *forw_packet,
 
 		buff_pos += BATADV_OGM_HLEN;
 		buff_pos += ntohs(batadv_ogm_packet->tvlv_len);
+		buff_pos += batadv_hlp_len(batadv_ogm_packet->helper_num);
 		packet_num++;
 		packet_pos = forw_packet->skb->data + buff_pos;
 		batadv_ogm_packet = (struct batadv_ogm_packet *)packet_pos;
@@ -464,9 +468,13 @@ static void batadv_iv_ogm_aggregate_new(const unsigned char *packet_buff,
 	skb_reserve(forw_packet_aggr->skb, ETH_HLEN);
 
 	skb_buff = skb_put(forw_packet_aggr->skb, packet_len);
-	forw_packet_aggr->packet_len = packet_len;
 	memcpy(skb_buff, packet_buff, packet_len);
 
+	packet_len = batadv_hlp_write_ogm_helpers(forw_packet_aggr->skb,
+						  bat_priv, skb_buff,
+						  packet_len);
+
+	forw_packet_aggr->packet_len = packet_len;
 	forw_packet_aggr->own = own_packet;
 	forw_packet_aggr->if_incoming = if_incoming;
 	forw_packet_aggr->num_packets = 0;
@@ -495,7 +503,8 @@ out:
 }
 
 /* aggregate a new packet into the existing ogm packet */
-static void batadv_iv_ogm_aggregate(struct batadv_forw_packet *forw_packet_aggr,
+static void batadv_iv_ogm_aggregate(struct batadv_priv *bat_priv,
+				    struct batadv_forw_packet *forw_packet_aggr,
 				    const unsigned char *packet_buff,
 				    int packet_len, bool direct_link)
 {
@@ -504,6 +513,11 @@ static void batadv_iv_ogm_aggregate(struct batadv_forw_packet *forw_packet_aggr,
 
 	skb_buff = skb_put(forw_packet_aggr->skb, packet_len);
 	memcpy(skb_buff, packet_buff, packet_len);
+
+	packet_len = batadv_hlp_write_ogm_helpers(forw_packet_aggr->skb,
+						  bat_priv, skb_buff,
+						  packet_len);
+
 	forw_packet_aggr->packet_len += packet_len;
 	forw_packet_aggr->num_packets++;
 
@@ -568,7 +582,7 @@ static void batadv_iv_ogm_queue_add(struct batadv_priv *bat_priv,
 					    send_time, direct_link,
 					    if_incoming, own_packet);
 	} else {
-		batadv_iv_ogm_aggregate(forw_packet_aggr, packet_buff,
+		batadv_iv_ogm_aggregate(bat_priv, forw_packet_aggr, packet_buff,
 					packet_len, direct_link);
 		spin_unlock_bh(&bat_priv->forw_bat_list_lock);
 	}
@@ -1205,6 +1219,10 @@ static void batadv_iv_ogm_process(const struct ethhdr *ethhdr,
 
 	orig_neigh_router = batadv_orig_node_get_router(orig_neigh_node);
 
+	if (orig_neigh_router)
+		batadv_hlp_update_orig(bat_priv, orig_node, orig_neigh_router,
+				       batadv_ogm_packet);
+
 	/* drop packet if sender is not a direct neighbor and if we
 	 * don't route towards it
 	 */
@@ -1307,7 +1325,8 @@ static int batadv_iv_ogm_receive(struct sk_buff *skb,
 
 	/* unpack the aggregated packets and process them one by one */
 	while (batadv_iv_ogm_aggr_packet(buff_pos, packet_len,
-					 batadv_ogm_packet->tvlv_len)) {
+					 batadv_ogm_packet->tvlv_len,
+					 batadv_ogm_packet->helper_num)) {
 		tvlv_buff = packet_buff + buff_pos + BATADV_OGM_HLEN;
 
 		batadv_iv_ogm_process(ethhdr, batadv_ogm_packet,
@@ -1315,6 +1334,7 @@ static int batadv_iv_ogm_receive(struct sk_buff *skb,
 
 		buff_pos += BATADV_OGM_HLEN;
 		buff_pos += ntohs(batadv_ogm_packet->tvlv_len);
+		buff_pos += batadv_hlp_len(batadv_ogm_packet->helper_num);
 
 		packet_pos = packet_buff + buff_pos;
 		batadv_ogm_packet = (struct batadv_ogm_packet *)packet_pos;

@@ -29,6 +29,7 @@
 #include "distributed-arp-table.h"
 #include "network-coding.h"
 #include "fragmentation.h"
+#include "helper.h"
 
 static int batadv_route_unicast_packet(struct sk_buff *skb,
 				       struct batadv_hard_iface *recv_if);

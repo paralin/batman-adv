@@ -23,6 +23,7 @@
 #include "packet.h"
 #include "bitarray.h"
 #include <linux/kernel.h>
+#include <net/genetlink.h>
 
 #ifdef CONFIG_BATMAN_ADV_DAT
 
@@ -34,6 +35,48 @@
 #define batadv_dat_addr_t uint16_t
 
 #endif /* CONFIG_BATMAN_ADV_DAT */
+
+#ifdef CONFIG_BATMAN_ADV_HELPER
+
+enum {
+	BATADV_HLP_A_UNSPEC,
+	BATADV_HLP_A_IFNAME,
+	BATADV_HLP_A_IFINDEX,
+	BATADV_HLP_A_SRC,
+	BATADV_HLP_A_DST,
+	BATADV_HLP_A_ADDR,
+	BATADV_HLP_A_TQ,
+	BATADV_HLP_A_HOP_LIST,
+	BATADV_HLP_A_RLY_LIST,
+	BATADV_HLP_A_NUM,
+};
+#define BATADV_HLP_A_MAX (BATADV_HLP_A_NUM - 1)
+
+enum {
+	BATADV_HLP_HOP_A_UNSPEC,
+	BATADV_HLP_HOP_A_INFO,
+	BATADV_HLP_HOP_A_NUM,
+};
+#define BATADV_HLP_HOP_A_MAX (BATADV_HLP_HOP_A_NUM - 1)
+
+enum {
+	BATADV_HLP_RLY_A_UNSPEC,
+	BATADV_HLP_RLY_A_INFO,
+	BATADV_HLP_RLY_A_NUM,
+};
+#define BATADV_HLP_RLY_A_MAX (BATADV_HLP_RLY_A_NUM - 1)
+
+enum {
+	BATADV_HLP_C_UNSPEC,
+	BATADV_HLP_C_REGISTER,
+	BATADV_HLP_C_GET_RELAYS,
+	BATADV_HLP_C_GET_LINK,
+	BATADV_HLP_C_GET_ONE_HOP,
+	BATADV_HLP_C_NUM,
+};
+#define BATADV_HLP_C_MAX (BATADV_HLP_C_NUM - 1)
+
+#endif /* CONFIG_BATMAN_ADV_HELPER */
 
 /**
  * struct batadv_hard_iface_bat_iv - per hard interface B.A.T.M.A.N. IV data
@@ -150,6 +193,9 @@ struct batadv_frag_list_entry {
  * @in_coding_list_lock: protects in_coding_list
  * @out_coding_list_lock: protects out_coding_list
  * @fragments: array with heads for fragment chains
+ * @one_hops: list of neigh_nodes that can hear this orig
+ * @one_hops_lock: lock for rlnc_list
+ * @one_hops_count: number of one_hops
  */
 struct batadv_orig_node {
 	uint8_t orig[ETH_ALEN];
@@ -197,6 +243,11 @@ struct batadv_orig_node {
 	spinlock_t out_coding_list_lock; /* Protects out_coding_list */
 #endif
 	struct batadv_frag_table_entry fragments[BATADV_FRAG_BUFFER_COUNT];
+#ifdef CONFIG_BATMAN_ADV_HELPER
+	struct hlist_head one_hops;
+	spinlock_t one_hops_lock; /* protects rlnc_list */
+	uint8_t one_hops_count;
+#endif
 };
 
 /**
@@ -207,6 +258,7 @@ struct batadv_orig_node {
 enum batadv_orig_capabilities {
 	BATADV_ORIG_CAPA_HAS_DAT = BIT(1),
 	BATADV_ORIG_CAPA_HAS_NC = BIT(2),
+	BATADV_ORIG_CAPA_CAN_HLP = BIT(3),
 };
 
 /**
@@ -629,6 +681,11 @@ struct batadv_priv {
 	atomic_t network_coding;
 	struct batadv_priv_nc nc;
 #endif /* CONFIG_BATMAN_ADV_NC */
+#ifdef CONFIG_BATMAN_ADV_HELPER
+	struct sock *helper_nl_sock;
+	struct genl_family hlp_genl_family;
+	u32 genl_portid;
+#endif
 };
 
 /**
@@ -874,6 +931,7 @@ struct batadv_nc_packet {
  *  opportunities in network-coding.c
  */
 struct batadv_skb_cb {
+	struct batadv_priv *bat_priv;
 	bool decoded;
 };
 
@@ -1012,6 +1070,24 @@ struct batadv_tvlv_handler {
 enum batadv_tvlv_handler_flags {
 	BATADV_TVLV_HANDLER_OGM_CIFNOTFND = BIT(1),
 	BATADV_TVLV_HANDLER_OGM_CALLED = BIT(2),
+};
+
+struct batadv_helper_entry {
+	struct batadv_helper_info info;
+	struct hlist_node node;
+	struct rcu_head rcu;
+	unsigned long timestamp;
+};
+
+struct batadv_one_hop {
+	struct hlist_head helpers;
+	spinlock_t helpers_lock; /* protects hlist helpers */
+	struct hlist_node node;
+	struct rcu_head rcu;
+	atomic_t refcount;
+	unsigned long timestamp;
+	int helper_count;
+	struct batadv_helper_info info;
 };
 
 #endif /* _NET_BATMAN_ADV_TYPES_H_ */
