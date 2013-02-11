@@ -145,7 +145,6 @@ static void batadv_orig_node_free_rcu(struct rcu_head *rcu)
 				  "originator timed out");
 
 	kfree(orig_node->tt_buff);
-	kfree(orig_node->mcast_mla_buff);
 	kfree(orig_node->bcast_own);
 	kfree(orig_node->bcast_own_sum);
 	kfree(orig_node);
@@ -216,7 +215,6 @@ struct batadv_orig_node *batadv_get_orig_node(struct batadv_priv *bat_priv,
 	INIT_LIST_HEAD(&orig_node->bond_list);
 	spin_lock_init(&orig_node->ogm_cnt_lock);
 	spin_lock_init(&orig_node->bcast_seqno_lock);
-	spin_lock_init(&orig_node->mcast_mla_lock);
 	spin_lock_init(&orig_node->mcast_seqno_lock);
 	spin_lock_init(&orig_node->neigh_list_lock);
 	spin_lock_init(&orig_node->tt_buff_lock);
@@ -235,7 +233,6 @@ struct batadv_orig_node *batadv_get_orig_node(struct batadv_priv *bat_priv,
 	orig_node->tt_buff_len = 0;
 	atomic_set(&orig_node->tt_size, 0);
 	reset_time = jiffies - 1 - msecs_to_jiffies(BATADV_RESET_PROTECTION_MS);
-	orig_node->mcast_num_mla = 0;
 	orig_node->bcast_seqno_reset = reset_time;
 	orig_node->batman_seqno_reset = reset_time;
 	orig_node->mcast_seqno_reset = reset_time;

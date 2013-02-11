@@ -388,64 +388,6 @@ out:
 #endif
 
 /**
- * batadv_mcast_mla_realloc - Reallocates a packet/MLA buffer
- * @packet_buff:	Pointer to the to be reallocated buffer
- * @packet_buff_len:	Length of the current and new buffer
- * @mla_offset:		Offset for MLAs within packet_buff
- * @new_len:		Requested size for reallocated buffer
- *
- * Reallocates a buffer and adjusts packet_buff_len
- * (to the effective and not necessarilly real buffer size).
- *
- * Returns the number of MLAs which now fit into the buffer.
- */
-static int batadv_mcast_mla_realloc(unsigned char **packet_buff,
-				    int *packet_buff_len,
-				    const int mla_offset,
-				    const int new_len)
-{
-	unsigned char *new_buff;
-
-	new_buff = kmalloc(new_len, GFP_ATOMIC);
-
-	/* keep old buffer if kmalloc should fail */
-	if (!new_buff) {
-		pr_warn("Failed to allocate for multicast listener announcements\n");
-		return -ENOMEM;
-	}
-
-	memcpy(new_buff, *packet_buff, mla_offset);
-	kfree(*packet_buff);
-	*packet_buff = new_buff;
-	*packet_buff_len = new_len;
-
-	return new_len;
-}
-
-/**
- * batadv_mcast_mla_fill - Fill buffer from a list of MLAs
- * @mla_buff:		Buffer to copy the MLAs to
- *			(caller needs to take care of sufficient space)
- * @mcast_list:		List of MLAs to copy from
- *
- * Copies the multicast addresses provided by mcast_list into the provided
- * MLA buffer.
- *
- * Caller needs to take care of sufficient space in mla_buff (ETH_ALEN bytes
- * per list item that is).
- */
-static void batadv_mcast_mla_fill(unsigned char *mla_buff,
-				  struct list_head *mcast_list)
-{
-	struct netdev_hw_addr *mcast_entry;
-
-	list_for_each_entry(mcast_entry, mcast_list, list) {
-		memcpy(mla_buff, &mcast_entry->addr, ETH_ALEN);
-		mla_buff += ETH_ALEN;
-	}
-}
-
-/**
  * batadv_mcast_mla_collect_free - Frees a list of multicast addresses
  * @mcast_list:		The list to free
  *
@@ -459,77 +401,6 @@ void batadv_mcast_mla_collect_free(struct list_head *mcast_list)
 		list_del(&mcast_entry->list);
 		kfree(mcast_entry);
 	}
-}
-
-/**
- * batadv_mcast_mla_append - Appends multicast announcements to a packet buffer
- * @soft_iface:		Virtual batman mesh interface, used for fetching
- *			multicast MAC addresses
- * @packet_buff:	Packet buffer to attach the MLAs to
- *			(might get reallocated if too small)
- * @packet_buff_len:	Length of the current and new buffer
- * @mla_offset:		Offset for MLAs within packet_buff
- *
- * If multicast optimization is enabled then this attaches multicast
- * MAC addresses derived from "unspecial" (that is link-local IPv4 or
- * transient IPv6) IP addresses from our local soft interface (or
- * its master interface, e.g. a bridge interface) and any possible bridge
- * snooped multicast listener to an OGM (packet_buff) and returns the amount
- * of these attached addresses.
- */
-int batadv_mcast_mla_append(struct net_device *soft_iface,
-			    unsigned char **packet_buff, int *packet_buff_len,
-			    const int mla_offset)
-{
-	int new_len, num_mla = 0, ret = 0;
-	struct batadv_priv *bat_priv = netdev_priv(soft_iface);
-	struct list_head mcast_list;
-
-	INIT_LIST_HEAD(&mcast_list);
-
-	/* Avoid attaching MLAs, if multicast optimization is disabled */
-	if (!atomic_read(&bat_priv->mcast_group_awareness))
-		goto out;
-
-	ret = batadv_mcast_mla_local_collect(soft_iface, &mcast_list,
-					     BATADV_MLA_MAX);
-	if (ret < 0)
-		goto out;
-
-	num_mla = ret;
-
-#ifdef CONFIG_BATMAN_ADV_MCAST_BRIDGE_SNOOP
-	ret = batadv_mcast_mla_bridge_collect(soft_iface, &mcast_list,
-					      BATADV_MLA_MAX - num_mla);
-	if (ret < 0)
-		goto out;
-
-	num_mla += ret;
-#endif
-
-	/* nothing to do */
-	if (num_mla == 0)
-		goto out;
-
-	/* Yes, it's ugly to possibly reallocate this buffer again
-	 * after the TT code might have done already.
-	 * FIXME: The upcoming TLV feature should handle this in a more sane
-	 * way with a pretty sk_buff */
-	new_len = mla_offset + batadv_mcast_mla_len(num_mla);
-	if (*packet_buff_len < new_len) {
-		ret = batadv_mcast_mla_realloc(packet_buff, packet_buff_len,
-					       mla_offset, new_len);
-		/* Out-of-memory */
-		if (ret < 0)
-			goto out;
-	}
-
-	batadv_mcast_mla_fill(*packet_buff + mla_offset, &mcast_list);
-
-out:
-	batadv_mcast_mla_collect_free(&mcast_list);
-
-	return ret < 0 ? ret : num_mla;
 }
 
 static void batadv_mcast_mla_tt_clean(struct batadv_priv *bat_priv,
@@ -608,54 +479,6 @@ out:
 	batadv_mcast_mla_collect_free(&mcast_list);
 }
 
-/**
- * batadv_mcast_mla_update - Updates MLA buffer of another originator
- * @orig_node:	The originator node who's MLA buffer we want to check/update
- * @mla_buff:	The new MLA information we just received
- * @num_mla:	Number of MLAs within mla_buff
- * @bat_priv:	bat_priv for checking if multicast optimization is enabled
- *
- * If multicast optimization is enabled then this checks whether the MCA
- * information we just received from another originator has changed.
- * If so, it updates our internal MLA buffer.
- */
-void batadv_mcast_mla_update(struct batadv_orig_node *orig_node,
-			     const unsigned char *mla_buff, int num_mla,
-			     struct batadv_priv *bat_priv)
-{
-	/* Avoid buffering MLAs, if multicast optimization is disabled */
-	if (!atomic_read(&bat_priv->mcast_group_awareness))
-		return;
-
-	spin_lock_bh(&orig_node->mcast_mla_lock);
-
-	/* numbers differ? then reallocate buffer */
-	if (num_mla != orig_node->mcast_num_mla) {
-		kfree(orig_node->mcast_mla_buff);
-		if (num_mla > 0) {
-			orig_node->mcast_mla_buff =
-				kmalloc(batadv_mcast_mla_len(num_mla),
-					GFP_ATOMIC);
-			if (orig_node->mcast_mla_buff)
-				goto update;
-		}
-		orig_node->mcast_mla_buff = NULL;
-		orig_node->mcast_num_mla = 0;
-	/* size ok, just update? */
-	} else if (num_mla > 0 && memcmp(orig_node->mcast_mla_buff, mla_buff,
-					 batadv_mcast_mla_len(num_mla)))
-		goto update;
-
-	/* it's the same, leave it like that */
-	goto out;
-
-update:
-	memcpy(orig_node->mcast_mla_buff, mla_buff, num_mla * ETH_ALEN);
-	orig_node->mcast_num_mla = num_mla;
-out:
-	spin_unlock_bh(&orig_node->mcast_mla_lock);
-}
-
 int batadv_mcast_mla_local_seq_print_text(struct seq_file *seq, void *offset)
 {
 	struct net_device *net_dev = (struct net_device *)seq->private;
@@ -716,43 +539,3 @@ int batadv_mcast_mla_bridge_seq_print_text(struct seq_file *seq, void *offset)
 	return 0;
 }
 #endif
-
-int batadv_mcast_mla_global_seq_print_text(struct seq_file *seq, void *offset)
-{
-	struct net_device *net_dev = (struct net_device *)seq->private;
-	struct batadv_priv *bat_priv = netdev_priv(net_dev);
-	struct batadv_hashtable *hash = bat_priv->orig_hash;
-	struct batadv_orig_node *orig_node;
-	struct hlist_node *walk;
-	struct hlist_head *head;
-	int i, j;
-
-	seq_printf(seq,
-		   "Globally retrieved multicast listener announcements (from %s):\n",
-		   net_dev->name);
-
-	for (i = 0; i < hash->size; i++) {
-		head = &hash->table[i];
-
-		rcu_read_lock();
-		hlist_for_each_entry_rcu(orig_node, walk, head, hash_entry) {
-			spin_lock_bh(&orig_node->mcast_mla_lock);
-			if (!orig_node->mcast_num_mla) {
-				spin_unlock_bh(&orig_node->mcast_mla_lock);
-				continue;
-			}
-
-			seq_printf(seq, "Originator: %pM\n", orig_node->orig);
-			for (j = 0; j < orig_node->mcast_num_mla; j++) {
-				seq_printf(seq, "\t%pM",
-					   &orig_node->mcast_mla_buff[
-								j * ETH_ALEN]);
-			}
-			seq_printf(seq, "\n");
-			spin_unlock_bh(&orig_node->mcast_mla_lock);
-		}
-		rcu_read_unlock();
-	}
-
-	return 0;
-}

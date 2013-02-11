@@ -102,8 +102,6 @@ struct batadv_orig_node {
 	spinlock_t tt_buff_lock; /* protects tt_buff */
 	atomic_t tt_size;
 	bool tt_initialised;
-	unsigned char *mcast_mla_buff;
-	uint8_t mcast_num_mla;
 	uint32_t last_real_seqno;
 	uint8_t last_ttl;
 	DECLARE_BITMAP(bcast_bits, BATADV_TQ_LOCAL_WINDOW_SIZE);
@@ -124,7 +122,6 @@ struct batadv_orig_node {
 	spinlock_t ogm_cnt_lock;
 	/* bcast_seqno_lock protects bcast_bits, last_bcast_seqno */
 	spinlock_t bcast_seqno_lock;
-	spinlock_t mcast_mla_lock; /* protects mcast_mla_buff, mcast_num_mla */
 	spinlock_t mcast_seqno_lock; /* protects mcast_bits,
 				      *	 last_mcast_seqno */
 	spinlock_t tt_list_lock; /* protects tt_list */

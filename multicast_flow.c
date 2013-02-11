@@ -30,6 +30,8 @@
 #include "multicast_flow.h"
 #include "multicast_tracker.h"
 #include "hash.h"
+#include "translation-table.h"
+#include "originator.h"
 
 /**
  * batadv_mcast_flow_entry_free_ref - Release reference to flow entry
@@ -271,36 +273,15 @@ skip:
 static bool batadv_mcast_mla_listener_exists(uint8_t *mcast_addr,
 					     struct batadv_priv *bat_priv)
 {
-	struct batadv_hashtable *hash = bat_priv->orig_hash;
 	struct batadv_orig_node *orig_node;
-	struct hlist_node *walk;
-	struct hlist_head *head;
-	int i, j, ret = false;
 
-	for (i = 0; i < hash->size; i++) {
-		head = &hash->table[i];
+	orig_node = batadv_transtable_search(bat_priv, NULL, mcast_addr);
+	if (!orig_node)
+		return false;
 
-		rcu_read_lock();
-		hlist_for_each_entry_rcu(orig_node, walk, head, hash_entry) {
-			spin_lock_bh(&orig_node->mcast_mla_lock);
-			for (j = 0; j < orig_node->mcast_num_mla; j++) {
-				if (memcmp(&orig_node->mcast_mla_buff[
-								j * ETH_ALEN],
-					   mcast_addr, ETH_ALEN))
-					continue;
+	batadv_orig_node_free_ref(orig_node);
 
-				spin_unlock_bh(&orig_node->mcast_mla_lock);
-				rcu_read_unlock();
-				ret = true;
-				goto out;
-			}
-			spin_unlock_bh(&orig_node->mcast_mla_lock);
-		}
-		rcu_read_unlock();
-	}
-
-out:
-	return ret;
+	return true;
 }
 
 /**

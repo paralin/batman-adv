@@ -143,8 +143,6 @@ struct batadv_ogm_packet {
 	uint8_t  tt_num_changes;
 	uint8_t  ttvn; /* translation table version number */
 	__be16   tt_crc;
-	uint8_t  mcast_num_mla;
-	uint8_t  reserved;
 } __packed;
 
 #define BATADV_OGM_HLEN sizeof(struct batadv_ogm_packet)
