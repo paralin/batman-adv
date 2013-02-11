@@ -35,6 +35,7 @@
 #include "originator.h"
 #include "hard-interface.h"
 #include "send.h"
+#include "translation-table.h"
 
 #define TRACKER_BURST_EXTRA 2
 
@@ -272,62 +273,51 @@ static int batadv_mcast_tracker_collect_dests(
 				struct batadv_mcast_entries_list *mcast_entry)
 {
 	struct batadv_hashtable *hash = bat_priv->orig_hash;
-	struct batadv_orig_node *orig_node;
+	struct batadv_tt_global_entry *tt_global_entry = NULL;
+	struct batadv_tt_orig_list_entry *orig_entry;
 	struct hlist_node *walk;
 	struct hlist_head *head;
 	struct batadv_dest_entries_list *dest_entry;
-	int i, j, num_dests = 0;
+	int num_dests = 0;
 
 	if (!hash)
 		goto out;
 
-	for (i = 0; i < hash->size; i++) {
-		head = &hash->table[i];
+	tt_global_entry = batadv_tt_global_hash_find(bat_priv,
+						     mcast_entry->mcast_addr);
+	if (!tt_global_entry)
+		goto out;
 
-		rcu_read_lock();
-		hlist_for_each_entry_rcu(orig_node, walk, head, hash_entry) {
-			if (!atomic_inc_not_zero(&orig_node->refcount))
-				continue;
+	head = &tt_global_entry->orig_list;
 
-			spin_lock_bh(&orig_node->mcast_mla_lock);
-			for (j = 0; j < orig_node->mcast_num_mla; j++) {
-				if (memcmp(&orig_node->mcast_mla_buff[
-								ETH_ALEN * j],
-					   mcast_entry->mcast_addr, ETH_ALEN))
-					continue;
+	rcu_read_lock();
+	hlist_for_each_entry_rcu(orig_entry, walk, head, list) {
+		dest_entry = kmalloc(sizeof(struct batadv_dest_entries_list),
+				     GFP_ATOMIC);
+		if (!dest_entry)
+			goto free;
 
-				dest_entry = kmalloc(
-				       sizeof(struct batadv_dest_entries_list),
-				       GFP_ATOMIC);
-				if (!dest_entry)
-					goto free;
-
-				memcpy(dest_entry->dest, orig_node->orig,
-				       ETH_ALEN);
-				list_add(&dest_entry->list,
-					 &mcast_entry->dest_entries);
-				num_dests++;
-				break;
-			}
-			spin_unlock_bh(&orig_node->mcast_mla_lock);
-			batadv_orig_node_free_ref(orig_node);
-		}
-		rcu_read_unlock();
+		memcpy(dest_entry->dest, orig_entry->orig_node->orig,
+		       ETH_ALEN);
+		list_add(&dest_entry->list, &mcast_entry->dest_entries);
+		num_dests++;
+		break;
 	}
+	rcu_read_unlock();
 
 	goto out;
 
 free:
-	spin_unlock_bh(&orig_node->mcast_mla_lock);
 	rcu_read_unlock();
-	batadv_orig_node_free_ref(orig_node);
 
 	batadv_mcast_tracker_dests_free(&mcast_entry->dest_entries);
 	num_dests = 0;
 
 out:
+	if (tt_global_entry)
+		batadv_tt_global_entry_free_ref(tt_global_entry);
+
 	return num_dests;
-	return 0;
 }
 
 /**
@@ -403,7 +393,7 @@ static void batadv_mcast_tracker_collect_mcasts(
 
 		threshold_state = batadv_mcast_flow_update_entry(flow_entry,
 								 bat_priv, 0);
-		if (!threshold_state) {
+		if (threshold_state == BATADV_MCAST_THRESHOLD_LOW) {
 			batadv_mcast_flow_entry_free_ref(flow_entry);
 			continue;
 		}

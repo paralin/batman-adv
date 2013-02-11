@@ -274,6 +274,7 @@ struct batadv_priv_dat {
 #endif
 
 struct batadv_priv_mcast {
+	struct list_head mla_list;
 	struct hlist_head flow_table;
 	struct hlist_head forw_table;
 	spinlock_t flow_table_lock; /* protects mcast_flow_table */

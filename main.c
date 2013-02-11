@@ -116,6 +116,7 @@ int batadv_mesh_init(struct net_device *soft_iface)
 	INIT_LIST_HEAD(&bat_priv->tt.changes_list);
 	INIT_LIST_HEAD(&bat_priv->tt.req_list);
 	INIT_LIST_HEAD(&bat_priv->tt.roam_list);
+	INIT_LIST_HEAD(&bat_priv->mcast.mla_list);
 
 	ret = batadv_originator_init(bat_priv);
 	if (ret < 0)

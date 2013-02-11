@@ -44,6 +44,9 @@
 
 #include "main.h"
 #include "hash.h"
+#include "hard-interface.h"
+#include "originator.h"
+#include "translation-table.h"
 #include "multicast_flow.h"
 #include "multicast_tracker.h"
 
@@ -316,7 +319,7 @@ static inline bool batadv_mcast_mla_is_duplicate(uint8_t *mcast_addr,
 	struct netdev_hw_addr *mcast_entry;
 
 	list_for_each_entry(mcast_entry, mcast_list, list)
-		if (mcast_entry->addr == mcast_addr)
+		if (!memcmp(mcast_entry->addr, mcast_addr, ETH_ALEN))
 			return true;
 
 	return false;
@@ -448,7 +451,7 @@ static void batadv_mcast_mla_fill(unsigned char *mla_buff,
  *
  * Removes and frees all items in the given mcast_list.
  */
-static void batadv_mcast_mla_collect_free(struct list_head *mcast_list)
+void batadv_mcast_mla_collect_free(struct list_head *mcast_list)
 {
 	struct netdev_hw_addr *mcast_entry, *tmp;
 
@@ -527,6 +530,82 @@ out:
 	batadv_mcast_mla_collect_free(&mcast_list);
 
 	return ret < 0 ? ret : num_mla;
+}
+
+static void batadv_mcast_mla_tt_clean(struct batadv_priv *bat_priv,
+				      struct list_head *mcast_list)
+{
+	struct netdev_hw_addr *mcast_entry, *tmp;
+
+	list_for_each_entry_safe(mcast_entry, tmp, &bat_priv->mcast.mla_list, list) {
+		if (batadv_mcast_mla_is_duplicate(mcast_entry->addr, mcast_list))
+			continue;
+
+		batadv_tt_local_remove(bat_priv, mcast_entry->addr,
+				       "mcast TT outdated", 0);
+
+		list_del(&mcast_entry->list);
+		kfree(mcast_entry);
+	}
+}
+
+static void batadv_mcast_mla_tt_add(struct net_device *soft_iface,
+				    struct list_head *mcast_list)
+{
+	struct netdev_hw_addr *mcast_entry, *tmp;
+	struct batadv_priv *bat_priv = netdev_priv(soft_iface);
+
+	list_for_each_entry_safe(mcast_entry, tmp, mcast_list, list) {
+		if (batadv_mcast_mla_is_duplicate(mcast_entry->addr,
+						  &bat_priv->mcast.mla_list))
+			continue;
+
+		batadv_tt_local_add(soft_iface, mcast_entry->addr,
+				    BATADV_NULL_IFINDEX);
+		list_move_tail(&mcast_entry->list, &bat_priv->mcast.mla_list);
+	}
+}
+
+void batadv_mcast_mla_tt_update(struct batadv_priv *bat_priv)
+{
+	struct batadv_hard_iface *primary_if;
+	struct net_device *soft_iface;
+	struct list_head mcast_list;
+	int ret;
+
+	INIT_LIST_HEAD(&mcast_list);
+
+	primary_if = batadv_primary_if_get_selected(bat_priv);
+	if (!primary_if)
+		goto out;
+
+	soft_iface = primary_if->soft_iface;
+
+	/* Avoid attaching MLAs, if multicast optimization is disabled */
+	if (!atomic_read(&bat_priv->mcast_group_awareness))
+		goto update;
+
+	ret = batadv_mcast_mla_local_collect(soft_iface, &mcast_list,
+					     BATADV_MLA_MAX);
+	if (ret < 0)
+		goto out;
+
+#ifdef CONFIG_BATMAN_ADV_MCAST_BRIDGE_SNOOP
+	ret = batadv_mcast_mla_bridge_collect(soft_iface, &mcast_list,
+					      BATADV_MLA_MAX - num_mla);
+	if (ret < 0)
+		goto out;
+#endif
+
+update:
+	batadv_mcast_mla_tt_clean(bat_priv, &mcast_list);
+	batadv_mcast_mla_tt_add(soft_iface, &mcast_list);
+
+out:
+	if (primary_if)
+		batadv_hardif_free_ref(primary_if);
+
+	batadv_mcast_mla_collect_free(&mcast_list);
 }
 
 /**

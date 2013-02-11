@@ -24,6 +24,12 @@
 
 #define BATADV_MCAST_THR_CNT_WIN_SIZE	10
 
+enum batadv_mcast_flow_threshold_state {
+	BATADV_MCAST_THRESHOLD_UP,
+	BATADV_MCAST_THRESHOLD_HIGH,
+	BATADV_MCAST_THRESHOLD_LOW,
+};
+
 struct batadv_mcast_flow_entry {
 	struct hlist_node list;
 	uint8_t mcast_addr[ETH_ALEN];

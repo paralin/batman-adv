@@ -85,8 +85,8 @@ static inline long batadv_mcast_get_remaining_timeout(
 {
 	long forw_timeout = atomic_read(&bat_priv->mcast_forw_timeout);
 
-	forw_timeout = jiffies_to_msecs(nexthop_entry->timeout) -
-			jiffies_to_msecs(jiffies) + forw_timeout;
+	forw_timeout += ((long long)jiffies_to_msecs(nexthop_entry->timeout) -
+			 (long long)jiffies_to_msecs(jiffies));
 
 	return (forw_timeout > 0 ? forw_timeout : 0);
 }

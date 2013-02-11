@@ -31,12 +31,6 @@
 #include "multicast_tracker.h"
 #include "hash.h"
 
-enum batadv_mcast_flow_threshold_state {
-	BATADV_MCAST_THRESHOLD_UP,
-	BATADV_MCAST_THRESHOLD_HIGH,
-	BATADV_MCAST_THRESHOLD_LOW,
-};
-
 /**
  * batadv_mcast_flow_entry_free_ref - Release reference to flow entry
  * @flow_entry: The flow entry to release a reference from
@@ -500,10 +494,10 @@ int batadv_mcast_flow_table_seq_print_text(struct seq_file *seq, void *offset)
 		threshold_state = batadv_mcast_flow_update_entry(entry,
 								 bat_priv, 0);
 		grace_period_left =
-			jiffies_to_msecs(entry->grace_period_timeout) -
-			jiffies_to_msecs(jiffies);
+			((long long)jiffies_to_msecs(entry->grace_period_timeout) -
+			 (long long)jiffies_to_msecs(jiffies));
 
-		if (!threshold_state) {
+		if (threshold_state == BATADV_MCAST_THRESHOLD_LOW) {
 			state = ' ';
 		} else if (grace_period_left <= 0) {
 			state = '+';

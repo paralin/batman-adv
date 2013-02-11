@@ -22,6 +22,7 @@
 #include "main.h"
 #include "multicast_flow.h"
 #include "multicast_tracker.h"
+#include "multicast_mla.h"
 
 int batadv_mcast_init(struct batadv_priv *bat_priv)
 {
@@ -37,4 +38,5 @@ void batadv_mcast_free(struct batadv_priv *bat_priv)
 {
 	batadv_mcast_flow_table_free(bat_priv);
 	batadv_mcast_tracker_stop(bat_priv);
+	batadv_mcast_mla_collect_free(&bat_priv->mcast.mla_list);
 }

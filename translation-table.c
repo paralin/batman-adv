@@ -26,6 +26,7 @@
 #include "originator.h"
 #include "routing.h"
 #include "bridge_loop_avoidance.h"
+#include "multicast.h"
 
 #include <linux/crc16.h>
 
@@ -100,7 +101,7 @@ batadv_tt_local_hash_find(struct batadv_priv *bat_priv, const void *data)
 	return tt_local_entry;
 }
 
-static struct batadv_tt_global_entry *
+struct batadv_tt_global_entry *
 batadv_tt_global_hash_find(struct batadv_priv *bat_priv, const void *data)
 {
 	struct batadv_tt_common_entry *tt_common_entry;
@@ -134,7 +135,7 @@ static void batadv_tt_global_entry_free_rcu(struct rcu_head *rcu)
 	kfree(tt_global_entry);
 }
 
-static void
+void
 batadv_tt_global_entry_free_ref(struct batadv_tt_global_entry *tt_global_entry)
 {
 	if (atomic_dec_and_test(&tt_global_entry->common.refcount)) {
@@ -265,7 +266,8 @@ void batadv_tt_local_add(struct net_device *soft_iface, const uint8_t *addr,
 	bool roamed_back = false;
 
 	tt_local = batadv_tt_local_hash_find(bat_priv, addr);
-	tt_global = batadv_tt_global_hash_find(bat_priv, addr);
+	tt_global = is_multicast_ether_addr(addr) ? NULL :
+		    batadv_tt_global_hash_find(bat_priv, addr);
 
 	if (tt_local) {
 		tt_local->last_seen = jiffies;
@@ -890,6 +892,10 @@ add_orig_entry:
 	ret = 1;
 
 out_remove:
+	/* Do not remove multicast addresses from the local hash on
+	 * global additions */
+	if (is_multicast_ether_addr(tt_addr))
+		goto out;
 
 	/* remove address from local hash if present */
 	local_flags = batadv_tt_local_remove(bat_priv, tt_addr,
@@ -2391,6 +2397,9 @@ int batadv_tt_append_diff(struct batadv_priv *bat_priv,
 			  int packet_min_len)
 {
 	int tt_num_changes;
+
+	/* Update multicast addresses in local translation table */
+	batadv_mcast_mla_tt_update(bat_priv);
 
 	/* if at least one change happened */
 	tt_num_changes = batadv_tt_commit_changes(bat_priv, packet_buff,

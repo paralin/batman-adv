@@ -31,6 +31,7 @@ int batadv_mcast_mla_len(int changes_num);
 int batadv_mcast_mla_append(struct net_device *soft_iface,
 			    unsigned char **packet_buff, int *packet_buff_len,
 			    int packet_min_len);
+void batadv_mcast_mla_tt_update(struct batadv_priv *bat_priv);
 void batadv_mcast_mla_update(struct batadv_orig_node *orig_node,
 			     const unsigned char *mla_buff, int num_mla,
 			     struct batadv_priv *bat_priv);
