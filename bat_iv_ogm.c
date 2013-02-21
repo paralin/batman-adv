@@ -629,6 +629,11 @@ static void batadv_iv_ogm_schedule(struct batadv_hard_iface *hard_iface)
 	else
 		batadv_ogm_packet->flags &= ~BATADV_VIS_SERVER;
 
+	if (atomic_read(&bat_priv->mcast_group_awareness))
+		batadv_ogm_packet->flags |= BATADV_MCAST_OPTIMIZATIONS;
+	else
+		batadv_ogm_packet->flags &= ~BATADV_MCAST_OPTIMIZATIONS;
+
 	if (hard_iface == primary_if &&
 	    atomic_read(&bat_priv->gw_mode) == BATADV_GW_MODE_SERVER) {
 		bandwidth = (uint8_t)atomic_read(&bat_priv->gw_bandwidth);

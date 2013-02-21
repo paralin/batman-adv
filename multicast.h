@@ -47,6 +47,8 @@ int batadv_mcast_tracker_interval_set(struct net_device *net_dev, char *buff,
 void batadv_mcast_tracker_packet_route(struct sk_buff *skb,
 				       struct batadv_priv *bat_priv,
 				       int num_redundancy);
+bool batadv_mcast_tracker_check_unicast(struct sk_buff *skb, int hdr_size,
+					struct net_device *soft_iface);
 
 /* from multicast_forw.c */
 void batadv_mcast_forw_table_purge(struct batadv_priv *bat_priv);

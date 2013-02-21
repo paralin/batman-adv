@@ -300,8 +300,8 @@ out:
  *
  * Returns false if the buffer extension was not possible or true otherwise
  */
-static bool batadv_unicast_push_and_fill_skb(struct sk_buff *skb, int hdr_size,
-					     struct batadv_orig_node *orig_node)
+bool batadv_unicast_push_and_fill_skb(struct sk_buff *skb, int hdr_size,
+				      struct batadv_orig_node *orig_node)
 {
 	struct batadv_unicast_packet *unicast_packet;
 	uint8_t ttvn = (uint8_t)atomic_read(&orig_node->last_ttvn);

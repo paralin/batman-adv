@@ -1075,6 +1075,10 @@ int batadv_recv_unicast_packet(struct sk_buff *skb,
 	if (is4addr)
 		hdr_size = sizeof(*unicast_4addr_packet);
 
+	if (batadv_mcast_tracker_check_unicast(skb, hdr_size,
+					       recv_if->soft_iface))
+		return batadv_recv_mcast_tracker_packet(skb, recv_if);
+
 	if (batadv_check_unicast_packet(skb, hdr_size) < 0)
 		return NET_RX_DROP;
 

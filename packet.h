@@ -49,13 +49,14 @@ enum batadv_subtype {
 };
 
 /* this file is included by batctl which needs these defines */
-#define BATADV_COMPAT_VERSION 15
+#define BATADV_COMPAT_VERSION 14
 
 enum batadv_iv_flags {
 	BATADV_NOT_BEST_NEXT_HOP   = BIT(3),
 	BATADV_PRIMARIES_FIRST_HOP = BIT(4),
 	BATADV_VIS_SERVER	   = BIT(5),
 	BATADV_DIRECTLINK	   = BIT(6),
+	BATADV_MCAST_OPTIMIZATIONS = BIT(7),
 };
 
 /* ICMP message types */
@@ -65,6 +66,11 @@ enum batadv_icmp_packettype {
 	BATADV_ECHO_REQUEST	       = 8,
 	BATADV_TTL_EXCEEDED	       = 11,
 	BATADV_PARAMETER_PROBLEM       = 12,
+};
+
+/* BATADV_BCAST flags */
+enum batadv_bcast_flags {
+	BATADV_MCAST_COMPAT = BIT(1),
 };
 
 /* vis defines */
@@ -222,7 +228,7 @@ struct batadv_unicast_frag_packet {
 
 struct batadv_bcast_packet {
 	struct batadv_header header;
-	uint8_t  reserved;
+	uint8_t  flags;
 	__be32   seqno;
 	uint8_t  orig[ETH_ALEN];
 	/* "4 bytes boundary + 2 bytes" long to make the payload after the

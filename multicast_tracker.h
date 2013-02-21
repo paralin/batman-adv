@@ -24,6 +24,7 @@
 
 struct batadv_dest_entries_list {
 	struct list_head list;
+	bool is_compat;
 	uint8_t dest[6];
 	struct batadv_hard_iface *hard_iface;
 };

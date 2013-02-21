@@ -34,8 +34,10 @@
 #include "hash.h"
 #include "originator.h"
 #include "hard-interface.h"
+#include "soft-interface.h"
 #include "send.h"
 #include "translation-table.h"
+#include "unicast.h"
 
 #define TRACKER_BURST_EXTRA 2
 
@@ -260,6 +262,53 @@ static void batadv_mcast_tracker_dests_free(struct list_head *dest_entries)
 }
 
 /**
+ * batadv_mcast_tracker_collect_dests_compat - Coll. non-mcast-aware targets
+ *
+ *
+ */
+static int batadv_mcast_tracker_collect_dests_compat(
+						struct batadv_priv *bat_priv,
+						struct list_head *dest_entries)
+{
+	struct batadv_hashtable *hash = bat_priv->orig_hash;
+	struct hlist_node *node;
+	struct hlist_head *head;
+	struct batadv_orig_node *orig_node;
+	struct batadv_dest_entries_list *dest_entry;
+	int i, num_dests = 0;
+
+	if (!hash)
+		goto out;
+
+	for (i = 0; i < hash->size; i++) {
+		head = &hash->table[i];
+
+		rcu_read_lock();
+		hlist_for_each_entry_rcu(orig_node, node, head, hash_entry) {
+			if (orig_node->flags & BATADV_MCAST_OPTIMIZATIONS)
+				continue;
+
+			dest_entry = kmalloc(sizeof(struct batadv_dest_entries_list),
+				     GFP_ATOMIC);
+			if (!dest_entry)
+				goto free;
+
+			memcpy(dest_entry->dest, orig_node->orig, ETH_ALEN);
+			list_add(&dest_entry->list, dest_entries);
+			num_dests++;
+		}
+		rcu_read_unlock();
+	}
+
+	goto out;
+free:
+	rcu_read_unlock();
+	num_dests = -1;
+out:
+	return num_dests;
+}
+
+/**
  * batadv_mcast_tracker_collect_dests - Coll. destinations for a mcast address
  * @bat_priv:		bat_priv for the mesh we are preparing this packet
  * @mcast_entry:	Multicast address entry to save destinations for and in
@@ -272,21 +321,17 @@ static int batadv_mcast_tracker_collect_dests(
 				struct batadv_priv *bat_priv,
 				struct batadv_mcast_entries_list *mcast_entry)
 {
-	struct batadv_hashtable *hash = bat_priv->orig_hash;
 	struct batadv_tt_global_entry *tt_global_entry = NULL;
 	struct batadv_tt_orig_list_entry *orig_entry;
 	struct hlist_node *walk;
 	struct hlist_head *head;
 	struct batadv_dest_entries_list *dest_entry;
-	int num_dests = 0;
-
-	if (!hash)
-		goto out;
+	int ret, num_dests = 0;
 
 	tt_global_entry = batadv_tt_global_hash_find(bat_priv,
 						     mcast_entry->mcast_addr);
 	if (!tt_global_entry)
-		goto out;
+		goto skip;
 
 	head = &tt_global_entry->orig_list;
 
@@ -301,10 +346,15 @@ static int batadv_mcast_tracker_collect_dests(
 		       ETH_ALEN);
 		list_add(&dest_entry->list, &mcast_entry->dest_entries);
 		num_dests++;
-		break;
 	}
 	rcu_read_unlock();
 
+skip:
+	ret = batadv_mcast_tracker_collect_dests_compat(bat_priv, &mcast_entry->dest_entries);
+	if (ret < 0)
+		goto free;
+
+	num_dests += ret;
 	goto out;
 
 free:
@@ -657,6 +707,8 @@ static int batadv_mcast_add_router_of_dest(
 	rcu_read_unlock();
 
 	memcpy(next_hop_entry->dest, router->addr, ETH_ALEN);
+	next_hop_entry->is_compat =
+		!(router->orig_node->flags & BATADV_MCAST_OPTIMIZATIONS);
 
 	if (forw_if_list)
 		batadv_mcast_forw_if_entry_prep(forw_if_list, if_num,
@@ -889,6 +941,157 @@ static int batadv_mcast_tracker_dec_ttl(
 	return 1;
 }
 
+static bool batadv_mcast_tracker_dest_again(
+			struct batadv_tracker_packet_state *state,
+			struct batadv_mcast_tracker_packet *tracker_packet)
+{
+	struct batadv_tracker_packet_state check;
+	int ret = false;
+
+	batadv_tracker_packet_for_each_dest(&check, tracker_packet) {
+		if (check.dest_entry == state->dest_entry)
+			break;
+
+		if (memcmp(check.dest_entry, state->dest_entry, ETH_ALEN))
+			continue;
+
+		ret = true;
+	}
+
+	return ret;
+}
+
+static void batadv_mcast_zero_tracker_packet_compat(char *dest,
+			struct batadv_mcast_tracker_packet *tracker_packet)
+{
+	struct batadv_tracker_packet_state state;
+
+	batadv_tracker_packet_for_each_dest(&state, tracker_packet) {
+		if (!memcmp(state.dest_entry, dest, ETH_ALEN))
+			continue;
+
+		memset(state.dest_entry, '\0', ETH_ALEN);
+	}
+}
+
+/**
+ * batadv_mcast_tracker_send_compat
+ *
+ * Consumes the given skb
+ */
+static void batadv_mcast_tracker_send_compat(
+				char *dest,
+				struct batadv_dest_entries_list *next_hop,
+				struct sk_buff *skb,
+				int num_redundancy,
+				struct batadv_priv *bat_priv)
+{
+	struct sk_buff *skb_cloned;
+	struct ethhdr *ethhdr;
+	struct batadv_orig_node *orig_node;
+	int i, hdr_size;
+
+	orig_node = batadv_get_orig_node(bat_priv, dest);
+	if (!orig_node)
+		goto err;
+
+	batadv_mcast_zero_tracker_packet_compat(dest, 
+			(struct batadv_mcast_tracker_packet *)skb->data);
+	batadv_mcast_shrink_tracker_packet(skb);
+
+	/* push to the ethernet header -
+	 * This header will cause older batman-adv versions to drop and ignore
+	 * this packet, but multicast aware nodes will process it
+	 */
+	if (batadv_skb_head_push(skb, ETH_HLEN) < 0)
+		goto err;
+
+	skb_reset_mac_header(skb);
+
+	ethhdr = (struct ethhdr *)skb_mac_header(skb);
+	/* TODO: fill in our permanent, soft interface address instead?
+	 * or check whether DAT/TT/BLA can handle it */
+	memset(ethhdr->h_source, 0, ETH_ALEN);
+	/* TODO: fill in the orig_node's permanent, soft-if address instead?
+	 * or check whether DAT/TT/BLA can handle it */
+	memset(ethhdr->h_dest, 0, ETH_ALEN);
+	ethhdr->h_proto = __constant_htons(ETH_P_BATMAN);
+
+	/* push to batman-adv unicast header */
+	hdr_size = sizeof(struct batadv_unicast_packet);
+	if (!batadv_unicast_push_and_fill_skb(skb, hdr_size, orig_node))
+		goto err;
+
+	for (i = 0; i < num_redundancy; i++) {
+		skb_cloned = skb_clone(skb, GFP_ATOMIC);
+		if (!skb_cloned)
+			goto err;
+
+		batadv_send_skb_packet(skb_cloned,
+				       next_hop->hard_iface,
+				       next_hop->dest);
+	}
+
+	batadv_send_skb_packet(skb, next_hop->hard_iface, next_hop->dest);
+	goto out;
+
+err:
+	kfree_skb(skb);
+out:
+	if (orig_node)
+		batadv_orig_node_free_ref(orig_node);
+}
+
+/**
+ * batadv_mcast_tracker_packet_route_compat
+ *
+ * Consumes the given skb.
+ */
+static void batadv_mcast_tracker_packet_route_compat(
+				struct sk_buff *skb,
+				struct batadv_dest_entries_list *next_hop,
+				struct batadv_priv *bat_priv,
+				int num_redundancy)
+{
+	struct batadv_mcast_tracker_packet *tracker_packet;
+	struct batadv_tracker_packet_state state;
+	struct sk_buff *skb_tmp;
+	char *dest = NULL;
+
+	tracker_packet = (struct batadv_mcast_tracker_packet *)skb->data;
+
+	batadv_tracker_packet_for_each_dest(&state, tracker_packet) {
+		if (!dest) {
+			dest = state.dest_entry;
+			continue;
+		}
+
+		if (batadv_mcast_tracker_dest_again(&state, tracker_packet))
+			continue;
+
+		skb_tmp = skb_copy(skb, GFP_ATOMIC);
+		if (!skb_tmp)
+			goto err;
+
+		batadv_mcast_tracker_send_compat(dest, next_hop, skb_tmp,
+						 num_redundancy, bat_priv);
+
+		dest = state.dest_entry;
+	}
+
+	if (!dest)
+		goto out;
+
+	batadv_mcast_tracker_send_compat(dest, next_hop, skb, num_redundancy,
+					 bat_priv);
+	goto out;
+
+err:
+	kfree_skb(skb);
+out:
+	return;
+}
+
 /**
  * batadv_mcast_tracker_packet_route - Split and send tracker packet
  * @skb:	A compact multicast tracker packet with all groups and
@@ -942,6 +1145,12 @@ void batadv_mcast_tracker_packet_route(struct sk_buff *skb,
 		if (skb_tmp->len ==
 		    sizeof(struct batadv_mcast_tracker_packet)) {
 			dev_kfree_skb(skb_tmp);
+			continue;
+		}
+
+		if (next_hop->is_compat) {
+			batadv_mcast_tracker_packet_route_compat(skb_tmp, next_hop,
+						     bat_priv, num_redundancy);
 			continue;
 		}
 
@@ -1025,4 +1234,44 @@ void batadv_mcast_tracker_burst(uint8_t *mcast_addr,
 	batadv_mcast_tracker_packet_route(tracker_packet, bat_priv,
 					  TRACKER_BURST_EXTRA);
 	dev_kfree_skb(tracker_packet);
+}
+
+bool batadv_mcast_tracker_check_unicast(struct sk_buff *skb, int hdr_size,
+					struct net_device *soft_iface)
+{
+	struct ethhdr *inner_ethhdr, *outter_ethhdr;
+	struct batadv_header *header;
+	struct batadv_priv *bat_priv = netdev_priv(soft_iface);
+
+	if (!atomic_read(&bat_priv->mcast_group_awareness))
+		return false;
+
+	if (!pskb_may_pull(skb, hdr_size + ETH_HLEN))
+		return false;
+
+	inner_ethhdr = (struct ethhdr *)(skb->data + hdr_size);
+	if (ntohs(inner_ethhdr->h_proto) != ETH_P_BATMAN)
+		return false;
+
+	if (!pskb_may_pull(skb, hdr_size + ETH_HLEN +
+				sizeof(struct batadv_header)))
+		return false;
+
+	header = (struct batadv_header *)(skb->data + hdr_size + ETH_HLEN);
+	if (header->packet_type != BATADV_MCAST_TRACKER)
+		return false;
+
+	outter_ethhdr = (struct ethhdr *)skb_mac_header(skb);
+	memcpy(inner_ethhdr->h_source, outter_ethhdr->h_source, ETH_ALEN);
+	memcpy(inner_ethhdr->h_dest, outter_ethhdr->h_dest, ETH_ALEN);
+
+	skb_pull_rcsum(skb, hdr_size);
+	skb_reset_mac_header(skb);
+
+	skb->protocol = eth_type_trans(skb, soft_iface);
+
+	/* Do not update stats here, this encapsulation is just a compat thing
+	 * - the tracker packet receive function will do that */
+
+	return true;
 }

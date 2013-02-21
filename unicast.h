@@ -32,6 +32,8 @@ void batadv_frag_list_free(struct list_head *head);
 int batadv_frag_send_skb(struct sk_buff *skb, struct batadv_priv *bat_priv,
 			 struct batadv_hard_iface *hard_iface,
 			 const uint8_t dstaddr[]);
+bool batadv_unicast_push_and_fill_skb(struct sk_buff *skb, int hdr_size,
+				      struct batadv_orig_node *orig_node);
 bool batadv_unicast_4addr_prepare_skb(struct batadv_priv *bat_priv,
 				      struct sk_buff *skb,
 				      struct batadv_orig_node *orig_node,
