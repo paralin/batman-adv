@@ -284,6 +284,38 @@ static bool batadv_mcast_mla_listener_exists(uint8_t *mcast_addr,
 	return true;
 }
 
+static bool batadv_mcast_mla_listener_exists_compat(
+						uint8_t *mcast_addr,
+						struct batadv_priv *bat_priv)
+{
+	struct batadv_hashtable *hash = bat_priv->orig_hash;
+	struct hlist_node *node;
+	struct hlist_head *head;
+	struct batadv_orig_node *orig_node;
+	int i;
+	bool ret = false;
+
+	if (!hash)
+		goto out;
+
+	for (i = 0; i < hash->size; i++) {
+		head = &hash->table[i];
+
+		rcu_read_lock();
+		hlist_for_each_entry_rcu(orig_node, node, head, hash_entry) {
+			if (orig_node->flags & BATADV_MCAST_OPTIMIZATIONS)
+				continue;
+
+			ret = true;
+			break;
+		}
+		rcu_read_unlock();
+	}
+
+out:
+	return ret;
+}
+
 /**
  * batadv_mcast_flow_table_update - Update a multicast flow table entry
  * @mcast_addr:	The multicast address (= flow table entry) we want to update
@@ -336,7 +368,8 @@ skip:
 		}
 	}
 
-	if (batadv_mcast_mla_listener_exists(mcast_addr, bat_priv))
+	if (batadv_mcast_mla_listener_exists(mcast_addr, bat_priv) ||
+	    batadv_mcast_mla_listener_exists_compat(mcast_addr, bat_priv))
 		ret = 0;
 
 out:
