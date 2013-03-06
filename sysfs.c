@@ -25,6 +25,7 @@
 #include "hard-interface.h"
 #include "gateway_common.h"
 #include "gateway_client.h"
+#include "network-coding.h"
 #include "vis.h"
 
 static struct net_device *batadv_kobj_to_netdev(struct kobject *obj)
@@ -443,7 +444,7 @@ static BATADV_ATTR(gw_bandwidth, S_IRUGO | S_IWUSR, batadv_show_gw_bwidth,
 BATADV_ATTR_SIF_UINT(log_level, S_IRUGO | S_IWUSR, 0, BATADV_DBG_ALL, NULL);
 #endif
 #ifdef CONFIG_BATMAN_ADV_NC
-BATADV_ATTR_SIF_BOOL(network_coding, S_IRUGO | S_IWUSR, NULL);
+BATADV_ATTR_SIF_BOOL(network_coding, S_IRUGO | S_IWUSR, batadv_nc_switch);
 #endif
 
 static struct batadv_attribute *batadv_mesh_attrs[] = {

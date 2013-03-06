@@ -26,6 +26,7 @@
 #include "routing.h"
 #include "sysfs.h"
 #include "originator.h"
+#include "network-coding.h"
 #include "hash.h"
 #include "bridge_loop_avoidance.h"
 
@@ -371,6 +372,10 @@ int batadv_hardif_enable_interface(struct batadv_hard_iface *hard_iface,
 		goto err_upper;
 	}
 
+	ret = batadv_nc_init_hard_iface(bat_priv, hard_iface);
+	if (ret < 0)
+		goto err_upper;
+
 	hard_iface->batman_adv_ptype.type = ethertype;
 	hard_iface->batman_adv_ptype.func = batadv_batman_skb_recv;
 	hard_iface->batman_adv_ptype.dev = hard_iface->net_dev;
@@ -457,6 +462,8 @@ void batadv_hardif_disable_interface(struct batadv_hard_iface *hard_iface,
 	/* nobody uses this interface anymore */
 	if (!bat_priv->num_ifaces && autodel == BATADV_IF_CLEANUP_AUTO)
 		batadv_softif_destroy_sysfs(hard_iface->soft_iface);
+
+	batadv_nc_clean_hard_iface(bat_priv, hard_iface);
 
 	netdev_upper_dev_unlink(hard_iface->net_dev, hard_iface->soft_iface);
 	hard_iface->soft_iface = NULL;

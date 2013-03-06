@@ -44,6 +44,11 @@ void batadv_nc_skb_store_sniffed_unicast(struct batadv_priv *bat_priv,
 					 struct sk_buff *skb);
 int batadv_nc_nodes_seq_print_text(struct seq_file *seq, void *offset);
 int batadv_nc_init_debugfs(struct batadv_priv *bat_priv);
+int batadv_nc_init_hard_iface(struct batadv_priv *bat_priv,
+			      struct batadv_hard_iface *hard_iface);
+int batadv_nc_clean_hard_iface(struct batadv_priv *bat_priv,
+			       struct batadv_hard_iface *hard_iface);
+void batadv_nc_switch(struct net_device *soft_iface);
 
 #else /* ifdef CONFIG_BATMAN_ADV_NC */
 
@@ -116,6 +121,24 @@ static inline int batadv_nc_nodes_seq_print_text(struct seq_file *seq,
 static inline int batadv_nc_init_debugfs(struct batadv_priv *bat_priv)
 {
 	return 0;
+}
+
+static inline int
+batadv_nc_init_hard_iface(struct batadv_priv *bat_priv,
+			  struct batadv_hard_iface *hard_iface)
+{
+	return 0;
+}
+
+static inline int
+batadv_nc_clean_hard_iface(struct batadv_priv *bat_priv,
+			   struct batadv_hard_iface *hard_iface)
+{
+	return 0;
+}
+
+static inline void batadv_nc_switch(struct net_device *soft_iface)
+{
 }
 
 #endif /* ifdef CONFIG_BATMAN_ADV_NC */

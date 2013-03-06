@@ -1827,3 +1827,84 @@ int batadv_nc_init_debugfs(struct batadv_priv *bat_priv)
 out:
 	return -ENOMEM;
 }
+
+/**
+ * _batadv_nc_init_hard_iface - init an hard interface
+ * @hard_iface: interface to be initialised
+ *
+ * Init the interface without checking for the NC to be enabled or not and
+ * return 0 on success, a negatove value representing the error otherwise
+ */
+static int _batadv_nc_init_hard_iface(struct batadv_hard_iface *hard_iface)
+{
+	return drv_set_promiscuity(hard_iface->net_dev, 1);
+}
+
+/**
+ * batadv_nc_init_hard_iface - performs init operations on an hard_iface
+ * @bat_priv:
+ * @hard_iface: interface to initialise for network coding
+ *
+ * Set promiscuous mode on for the given interface and return 0 on success, a
+ * negative value representing the error otherwise
+ */
+int batadv_nc_init_hard_iface(struct batadv_priv *bat_priv,
+			      struct batadv_hard_iface *hard_iface)
+{
+	if (!atomic_read(&bat_priv->network_coding))
+		return 0;
+
+	return _batadv_nc_init_hard_iface(hard_iface);
+}
+
+/**
+ * _batadv_nc_clean_hard_iface - clean up the interface
+ * @hard_iface: the interface to clean up
+ *
+ * Clean up the interface without checking for NC to be enabled or not and
+ * return 0 on success, a negative value representing the error otherwise
+ */
+static int _batadv_nc_clean_hard_iface(struct batadv_hard_iface *hard_iface)
+{
+	return drv_set_promiscuity(hard_iface->net_dev, -1);
+}
+
+
+/**
+ * batadv_nc_clean_hard_iface - performs clean up operations on an hard_iface
+ * @bat_priv:
+ * @hard_iface: interface to clean up for network coding
+ *
+ * Unset promiscuous mode on for the given interface and return 0 on success, a
+ * negative value representing the error otherwise
+ */
+int batadv_nc_clean_hard_iface(struct batadv_priv *bat_priv,
+			       struct batadv_hard_iface *hard_iface)
+{
+	if (!atomic_read(&bat_priv->network_coding))
+		return 0;
+
+	return _batadv_nc_clean_hard_iface(hard_iface);
+}
+
+/**
+ * batadv_nc_switch - performs operations on NC runtime switch
+ * @soft_iface: the involved soft interface
+ */
+void batadv_nc_switch(struct net_device *soft_iface)
+{
+	struct batadv_hard_iface *hard_iface_tmp;
+	bool enabled = atomic_read(&bat_priv->network_coding);
+
+	rcu_read_lock();
+	list_for_each_entry_rcu(hard_iface_tmp, &batadv_hardif_list, list) {
+		if (hard_iface_tmp->soft_iface != soft_iface)
+			continue;
+
+		if (enabled)
+			_batadv_nc_init_hard_iface(hard_iface_tmp);
+		else
+			_batadv_nc_clean_hard_iface(hard_iface_tmp);
+	}
+	rcu_read_unlock();
+}
