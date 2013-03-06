@@ -149,7 +149,7 @@ static int batadv_store_bool_attr(char *buff, size_t count,
 	}
 
 	if (atomic_read(attr) == enabled)
-		return count;
+		return 0;
 
 	batadv_info(net_dev, "%s: Changing from: %s to: %s\n", attr_name,
 		    atomic_read(attr) == 1 ? "enabled" : "disabled",
@@ -169,7 +169,7 @@ __batadv_store_bool_attr(char *buff, size_t count,
 
 	ret = batadv_store_bool_attr(buff, count, net_dev, attr->name,
 				     attr_store);
-	if (post_func && ret)
+	if (post_func && ret > 0)
 		post_func(net_dev);
 
 	return ret;
