@@ -644,13 +644,69 @@ static ssize_t batadv_show_iface_status(struct kobject *kobj,
 	return length;
 }
 
+static ssize_t batadv_show_iface_num_bcasts(struct kobject *kobj,
+				      struct attribute *attr, char *buff)
+{
+	struct net_device *net_dev = batadv_kobj_to_netdev(kobj);
+	struct batadv_hard_iface *hard_iface;
+	ssize_t length;
+	int num_bcasts;
+
+	hard_iface = batadv_hardif_get_by_netdev(net_dev);
+	if (!hard_iface)
+		return 0;
+
+	num_bcasts = atomic_read(&hard_iface->num_bcasts);
+	if (num_bcasts)
+		length = sprintf(buff, "%i\n", num_bcasts);
+	else
+		length = sprintf(buff, "default\n");
+
+	batadv_hardif_free_ref(hard_iface);
+
+	return length;
+}
+
+static ssize_t batadv_store_iface_num_bcasts(struct kobject *kobj,
+				       struct attribute *attr, char *buff,
+				       size_t count)
+{
+	struct net_device *net_dev = batadv_kobj_to_netdev(kobj);
+	struct batadv_hard_iface *hard_iface;
+	int ret;
+
+	hard_iface = batadv_hardif_get_by_netdev(net_dev);
+	if (!hard_iface)
+		return count;
+
+	if (buff[count - 1] == '\n')
+		buff[count - 1] = '\0';
+
+	if (strncmp(buff, "default", 8) == 0) {
+		atomic_set(&hard_iface->num_bcasts, 0);
+		ret = count;
+	} else {
+		ret = batadv_store_uint_attr(buff, count, net_dev, "num_bcasts",
+					     0, INT_MAX,
+					     &hard_iface->num_bcasts);
+	}
+
+	batadv_hardif_free_ref(hard_iface);
+
+	return ret;
+}
+
+
 static BATADV_ATTR(mesh_iface, S_IRUGO | S_IWUSR, batadv_show_mesh_iface,
 		   batadv_store_mesh_iface);
 static BATADV_ATTR(iface_status, S_IRUGO, batadv_show_iface_status, NULL);
+static BATADV_ATTR(iface_num_bcasts, S_IRUGO | S_IWUSR,
+		   batadv_show_iface_num_bcasts, batadv_store_iface_num_bcasts);
 
 static struct batadv_attribute *batadv_batman_attrs[] = {
 	&batadv_attr_mesh_iface,
 	&batadv_attr_iface_status,
+	&batadv_attr_iface_num_bcasts,
 	NULL,
 };
 

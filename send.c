@@ -237,7 +237,7 @@ static void batadv_send_outstanding_bcast_packet(struct work_struct *work)
 	struct sk_buff *skb1;
 	struct net_device *soft_iface;
 	struct batadv_priv *bat_priv;
-	int num_bcasts;
+	int num_bcasts, if_num_bcasts, max_num_bcasts = 0;
 
 	delayed_work = container_of(work, struct delayed_work, work);
 	forw_packet = container_of(delayed_work, struct batadv_forw_packet,
@@ -262,6 +262,16 @@ static void batadv_send_outstanding_bcast_packet(struct work_struct *work)
 		if (hard_iface->soft_iface != soft_iface)
 			continue;
 
+		if_num_bcasts = atomic_read(&hard_iface->num_bcasts);
+		if (if_num_bcasts == 0)
+			if_num_bcasts = num_bcasts;
+
+		if (forw_packet->num_packets >= if_num_bcasts)
+			continue;
+
+		if (if_num_bcasts > max_num_bcasts)
+			max_num_bcasts = if_num_bcasts;
+
 		/* send a copy of the saved skb */
 		skb1 = skb_clone(forw_packet->skb, GFP_ATOMIC);
 		if (skb1)
@@ -273,7 +283,7 @@ static void batadv_send_outstanding_bcast_packet(struct work_struct *work)
 	forw_packet->num_packets++;
 
 	/* if we still have some more bcasts to send */
-	if (forw_packet->num_packets < num_bcasts) {
+	if (forw_packet->num_packets < max_num_bcasts) {
 		_batadv_add_bcast_packet_to_list(bat_priv, forw_packet,
 						 msecs_to_jiffies(5));
 		return;
