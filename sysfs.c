@@ -435,6 +435,7 @@ BATADV_ATTR_SIF_UINT(orig_interval, S_IRUGO | S_IWUSR, 2 * BATADV_JITTER,
 		     INT_MAX, NULL);
 BATADV_ATTR_SIF_UINT(hop_penalty, S_IRUGO | S_IWUSR, 0, BATADV_TQ_MAX_VALUE,
 		     NULL);
+BATADV_ATTR_SIF_UINT(num_bcasts, S_IRUGO | S_IWUSR, 1, INT_MAX, NULL);
 BATADV_ATTR_SIF_UINT(gw_sel_class, S_IRUGO | S_IWUSR, 1, BATADV_TQ_MAX_VALUE,
 		     batadv_post_gw_deselect);
 static BATADV_ATTR(gw_bandwidth, S_IRUGO | S_IWUSR, batadv_show_gw_bwidth,
@@ -462,6 +463,7 @@ static struct batadv_attribute *batadv_mesh_attrs[] = {
 	&batadv_attr_gw_mode,
 	&batadv_attr_orig_interval,
 	&batadv_attr_hop_penalty,
+	&batadv_attr_num_bcasts,
 	&batadv_attr_gw_sel_class,
 	&batadv_attr_gw_bandwidth,
 #ifdef CONFIG_BATMAN_ADV_DEBUG

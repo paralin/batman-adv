@@ -555,6 +555,7 @@ struct batadv_priv {
 	atomic_t gw_bandwidth;
 	atomic_t orig_interval;
 	atomic_t hop_penalty;
+	atomic_t num_bcasts;
 #ifdef CONFIG_BATMAN_ADV_DEBUG
 	atomic_t log_level;
 #endif

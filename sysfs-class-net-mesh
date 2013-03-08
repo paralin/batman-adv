@@ -75,6 +75,14 @@ Description:
                 to send fewer wifi packets but still the same
                 content) is enabled or not.
 
+What:           /sys/class/net/<mesh_iface>/mesh/num_bcasts
+Date:           Mar 2013
+Contact:        Linus Lüssing <linus.luessing@web.de>
+Description:
+		Defines the number of broadcasts used to forward
+		a multicast (including broadcast) payload frame on an
+		interface.
+
 What:           /sys/class/net/<mesh_iface>/mesh/orig_interval
 Date:           May 2010
 Contact:        Marek Lindner <lindner_marek@yahoo.de>
