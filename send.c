@@ -138,12 +138,77 @@ void batadv_schedule_bat_ogm(struct batadv_hard_iface *hard_iface)
 	bat_priv->bat_algo_ops->bat_ogm_schedule(hard_iface);
 }
 
-static void batadv_forw_packet_free(struct batadv_forw_packet *forw_packet)
+/**
+ * batadv_forw_packet_alloc - Allocates a forwarding packet
+ * @if_incoming: The (optional) if_incoming to be grabbed
+ * @queue_left: The (optional) queue counter to decrease
+ * @bat_priv: The bat_priv for the mesh of this forw_packet
+ *
+ * Allocates a forwarding packet and tries to get a reference to the
+ * (optional) if_incoming and queue_left. If queue_left is NULL then
+ * bat_priv is optional, too.
+ *
+ * On success, returns the allocated forwarding packet. Otherwise returns
+ * NULL.
+ */
+struct batadv_forw_packet *batadv_forw_packet_alloc(
+					struct batadv_hard_iface *if_incoming,
+					atomic_t *queue_left,
+					struct batadv_priv *bat_priv)
+{
+	struct batadv_forw_packet *forw_packet = NULL;
+
+	if (if_incoming && !atomic_inc_not_zero(&if_incoming->refcount))
+		goto out;
+
+	if (queue_left && !batadv_atomic_dec_not_zero(queue_left)) {
+		if (queue_left == &bat_priv->bcast_queue_left)
+			batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
+				   "bcast queue full\n");
+		else if (queue_left == &bat_priv->batman_queue_left)
+			batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
+				   "batman queue full\n");
+		else
+			batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
+				   "a mysterious queue is full\n");
+		goto err;
+	}
+
+	forw_packet = kmalloc(sizeof(struct batadv_forw_packet), GFP_ATOMIC);
+	if (!forw_packet)
+		goto err2;
+
+	forw_packet->skb = NULL;
+	forw_packet->if_incoming = if_incoming;
+	forw_packet->queue_left = queue_left;
+
+	goto out;
+
+err2:
+	if (queue_left)
+		atomic_inc(queue_left);
+err:
+	if (if_incoming)
+		batadv_hardif_free_ref(if_incoming);
+out:
+	return forw_packet;
+}
+
+/**
+ * batadv_forw_packet_free - Frees a forwarding packet
+ * @forw_packet: The packet to free
+ *
+ * This frees a forwarding packet and releases any ressources it might
+ * have claimed.
+ */
+void batadv_forw_packet_free(struct batadv_forw_packet *forw_packet)
 {
 	if (forw_packet->skb)
 		kfree_skb(forw_packet->skb);
 	if (forw_packet->if_incoming)
 		batadv_hardif_free_ref(forw_packet->if_incoming);
+	if (forw_packet->queue_left)
+		atomic_inc(forw_packet->queue_left);
 	kfree(forw_packet);
 }
 
@@ -175,25 +240,21 @@ int batadv_add_bcast_packet_to_list(struct batadv_priv *bat_priv,
 				    const struct sk_buff *skb,
 				    unsigned long delay)
 {
-	struct batadv_hard_iface *primary_if = NULL;
+	struct batadv_hard_iface *primary_if;
 	struct batadv_forw_packet *forw_packet;
 	struct batadv_bcast_packet *bcast_packet;
 	struct sk_buff *newskb;
 
-	if (!batadv_atomic_dec_not_zero(&bat_priv->bcast_queue_left)) {
-		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
-			   "bcast packet queue full\n");
-		goto out;
-	}
-
 	primary_if = batadv_primary_if_get_selected(bat_priv);
 	if (!primary_if)
-		goto out_and_inc;
+		goto out;
 
-	forw_packet = kmalloc(sizeof(*forw_packet), GFP_ATOMIC);
-
+	forw_packet = batadv_forw_packet_alloc(primary_if,
+					       &bat_priv->bcast_queue_left,
+					       bat_priv);
+	batadv_hardif_free_ref(primary_if);
 	if (!forw_packet)
-		goto out_and_inc;
+		goto out;
 
 	newskb = skb_copy(skb, GFP_ATOMIC);
 	if (!newskb)
@@ -206,7 +267,6 @@ int batadv_add_bcast_packet_to_list(struct batadv_priv *bat_priv,
 	skb_reset_mac_header(newskb);
 
 	forw_packet->skb = newskb;
-	forw_packet->if_incoming = primary_if;
 
 	/* how often did we send the bcast packet ? */
 	forw_packet->num_packets = 0;
@@ -218,12 +278,8 @@ int batadv_add_bcast_packet_to_list(struct batadv_priv *bat_priv,
 	return NETDEV_TX_OK;
 
 packet_free:
-	kfree(forw_packet);
-out_and_inc:
-	atomic_inc(&bat_priv->bcast_queue_left);
+	batadv_forw_packet_free(forw_packet);
 out:
-	if (primary_if)
-		batadv_hardif_free_ref(primary_if);
 	return NETDEV_TX_BUSY;
 }
 
@@ -280,7 +336,6 @@ static void batadv_send_outstanding_bcast_packet(struct work_struct *work)
 
 out:
 	batadv_forw_packet_free(forw_packet);
-	atomic_inc(&bat_priv->bcast_queue_left);
 }
 
 void batadv_send_outstanding_bat_ogm_packet(struct work_struct *work)
@@ -310,10 +365,6 @@ void batadv_send_outstanding_bat_ogm_packet(struct work_struct *work)
 		batadv_schedule_bat_ogm(forw_packet->if_incoming);
 
 out:
-	/* don't count own packet */
-	if (!forw_packet->own)
-		atomic_inc(&bat_priv->batman_queue_left);
-
 	batadv_forw_packet_free(forw_packet);
 }
 

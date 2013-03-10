@@ -427,25 +427,12 @@ static void batadv_iv_ogm_aggregate_new(const unsigned char *packet_buff,
 	struct batadv_forw_packet *forw_packet_aggr;
 	unsigned char *skb_buff;
 	unsigned int skb_size;
+	atomic_t *queue_left = own_packet ? NULL : &bat_priv->batman_queue_left;
 
-	if (!atomic_inc_not_zero(&if_incoming->refcount))
+	forw_packet_aggr = batadv_forw_packet_alloc(if_incoming, queue_left,
+						    bat_priv);
+	if (!forw_packet_aggr)
 		return;
-
-	/* own packet should always be scheduled */
-	if (!own_packet) {
-		if (!batadv_atomic_dec_not_zero(&bat_priv->batman_queue_left)) {
-			batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
-				   "batman packet queue full\n");
-			goto out;
-		}
-	}
-
-	forw_packet_aggr = kmalloc(sizeof(*forw_packet_aggr), GFP_ATOMIC);
-	if (!forw_packet_aggr) {
-		if (!own_packet)
-			atomic_inc(&bat_priv->batman_queue_left);
-		goto out;
-	}
 
 	if ((atomic_read(&bat_priv->aggregated_ogms)) &&
 	    (packet_len < BATADV_MAX_AGGREGATION_BYTES))
@@ -457,10 +444,8 @@ static void batadv_iv_ogm_aggregate_new(const unsigned char *packet_buff,
 
 	forw_packet_aggr->skb = netdev_alloc_skb_ip_align(NULL, skb_size);
 	if (!forw_packet_aggr->skb) {
-		if (!own_packet)
-			atomic_inc(&bat_priv->batman_queue_left);
-		kfree(forw_packet_aggr);
-		goto out;
+		batadv_forw_packet_free(forw_packet_aggr);
+		return;
 	}
 	skb_reserve(forw_packet_aggr->skb, ETH_HLEN);
 
@@ -469,7 +454,6 @@ static void batadv_iv_ogm_aggregate_new(const unsigned char *packet_buff,
 	memcpy(skb_buff, packet_buff, packet_len);
 
 	forw_packet_aggr->own = own_packet;
-	forw_packet_aggr->if_incoming = if_incoming;
 	forw_packet_aggr->num_packets = 0;
 	forw_packet_aggr->direct_link_flags = BATADV_NO_FLAGS;
 	forw_packet_aggr->send_time = send_time;
@@ -489,10 +473,6 @@ static void batadv_iv_ogm_aggregate_new(const unsigned char *packet_buff,
 	queue_delayed_work(batadv_event_workqueue,
 			   &forw_packet_aggr->delayed_work,
 			   send_time - jiffies);
-
-	return;
-out:
-	batadv_hardif_free_ref(if_incoming);
 }
 
 /* aggregate a new packet into the existing ogm packet */

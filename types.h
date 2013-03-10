@@ -863,6 +863,7 @@ struct batadv_forw_packet {
 	uint8_t num_packets;
 	struct delayed_work delayed_work;
 	struct batadv_hard_iface *if_incoming;
+	atomic_t *queue_left;
 };
 
 /**

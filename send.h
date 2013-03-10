@@ -27,6 +27,11 @@ bool batadv_send_skb_to_orig(struct sk_buff *skb,
 			     struct batadv_orig_node *orig_node,
 			     struct batadv_hard_iface *recv_if);
 void batadv_schedule_bat_ogm(struct batadv_hard_iface *hard_iface);
+struct batadv_forw_packet *batadv_forw_packet_alloc(
+					struct batadv_hard_iface *if_incoming,
+					atomic_t *queue_left,
+					struct batadv_priv *bat_priv);
+void batadv_forw_packet_free(struct batadv_forw_packet *forw_packet);
 int batadv_add_bcast_packet_to_list(struct batadv_priv *bat_priv,
 				    const struct sk_buff *skb,
 				    unsigned long delay);
