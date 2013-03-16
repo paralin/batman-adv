@@ -49,6 +49,7 @@ struct batadv_mcast_forw_if_entry {
 	struct hlist_node list;
 	int16_t if_num;
 	int num_nexthops;
+	bool has_compat;
 	struct hlist_head mcast_nexthop_list;
 	struct rcu_head rcu;
 };
@@ -115,7 +116,8 @@ static inline long batadv_mcast_get_remaining_timeout(
  */
 void batadv_mcast_forw_if_entry_prep(struct hlist_head *forw_if_list,
 				     int16_t if_num,
-				     uint8_t *neigh_addr)
+				     uint8_t *neigh_addr,
+				     bool is_compat)
 {
 	struct batadv_mcast_forw_if_entry *forw_if_entry;
 	struct batadv_mcast_forw_nexthop_entry *forw_nexthop_entry;
@@ -132,10 +134,16 @@ void batadv_mcast_forw_if_entry_prep(struct hlist_head *forw_if_list,
 
 	forw_if_entry->if_num = if_num;
 	forw_if_entry->num_nexthops = 0;
+	forw_if_entry->has_compat = false;
 	INIT_HLIST_HEAD(&forw_if_entry->mcast_nexthop_list);
 	hlist_add_head(&forw_if_entry->list, forw_if_list);
 
 skip_create_if:
+	if (is_compat) {
+		forw_if_entry->has_compat = true;
+		return;
+	}
+
 	hlist_for_each_entry(forw_nexthop_entry, node,
 			     &forw_if_entry->mcast_nexthop_list, list) {
 		if (!memcmp(forw_nexthop_entry->neigh_addr,
@@ -566,6 +574,40 @@ static inline struct batadv_hard_iface *batadv_mcast_if_num_to_hard_if(
 	return NULL;
 }
 
+void batadv_mcast_forw_send_compat(struct sk_buff *skb,
+				   struct batadv_hard_iface *hard_iface)
+{
+	skb_pull(skb, sizeof());
+
+	if (batadv_skb_head_push(skb, sizeof(*bcast_packet)) < 0)
+		goto dropped;
+
+	bcast_packet = (struct batadv_bcast_packet *)skb->data;
+	bcast_packet->header.version = BATADV_COMPAT_VERSION;
+	bcast_packet->header.ttl = BATADV_TTL;
+
+	/* batman packet type: broadcast */
+	bcast_packet->header.packet_type = BATADV_BCAST;
+	bcast_packet->flags = 0;
+
+	/* hw address of first interface is the orig mac because only
+	 * this mac is known throughout the mesh
+	 */
+	memcpy(bcast_packet->orig,
+	       primary_if->net_dev->dev_addr, ETH_ALEN);
+
+	/* set broadcast sequence number */
+	seqno = atomic_inc_return(&bat_priv->bcast_seqno);
+	bcast_packet->seqno = htonl(seqno);
+
+	batadv_add_bcast_packet_to_list(bat_priv, skb, brd_delay);
+
+	/* a copy is stored in the bcast list, therefore removing
+	 * the original skb.
+	 */
+	kfree_skb(skb);
+}
+
 /**
  * batadv_mcast_nexthops_from_if_list - Generates a list of next hops
  * @mcast_if_list:	Multicast interface list we want to generate from
@@ -600,11 +642,23 @@ static inline void batadv_mcast_nexthops_from_if_list(
 		if (!hard_iface || !atomic_inc_not_zero(&hard_iface->refcount))
 			continue;
 
+		/* send a special batman-adv broadcast compat packet */
+		if (if_entry->has_compat) {
+			dest_entry = kmalloc(
+				       sizeof(struct batadv_dest_entries_list),
+					      GFP_ATOMIC);
+			dest_entry->is_compat = true;
+			dest_entry->hard_iface = hard_iface;
+			list_add(&dest_entry->list, nexthop_list);
+			continue;
+		}
+
 		/* send via broadcast */
 		if (if_entry->num_nexthops > mcast_fanout) {
 			dest_entry = kmalloc(
 				       sizeof(struct batadv_dest_entries_list),
 				       GFP_ATOMIC);
+			dest_entry->is_compat = false;
 			memcpy(dest_entry->dest, batadv_broadcast_addr,
 			       ETH_ALEN);
 			dest_entry->hard_iface = hard_iface;
@@ -622,6 +676,7 @@ static inline void batadv_mcast_nexthops_from_if_list(
 			dest_entry = kmalloc(
 				       sizeof(struct batadv_dest_entries_list),
 					      GFP_ATOMIC);
+			dest_entry->is_compat = false;
 			memcpy(dest_entry->dest, nexthop_entry->neigh_addr,
 			       ETH_ALEN);
 
@@ -633,6 +688,7 @@ static inline void batadv_mcast_nexthops_from_if_list(
 			dest_entry->hard_iface = hard_iface;
 			list_add(&dest_entry->list, nexthop_list);
 		}
+
 		batadv_hardif_free_ref(hard_iface);
 	}
 }
@@ -758,7 +814,11 @@ void batadv_mcast_forw_packet_route(struct sk_buff *skb,
 	rcu_read_unlock();
 
 	list_for_each_entry_safe(dest_entry, tmp, &nexthop_list, list) {
-		if (is_broadcast_ether_addr(dest_entry->dest)) {
+		if (dest_entry->is_compat) {
+			skb1 = skb_copy(skb, GFP_ATOMIC);
+			batadv_mcast_forw_send_compat(skb1,
+						      dest_entry->hard_iface);
+		} else if (is_broadcast_ether_addr(dest_entry->dest)) {
 			for (i = 0; i < num_bcasts; i++) {
 				skb1 = skb_clone(skb, GFP_ATOMIC);
 				batadv_send_skb_packet(skb1,
@@ -770,6 +830,7 @@ void batadv_mcast_forw_packet_route(struct sk_buff *skb,
 			batadv_send_skb_packet(skb1, dest_entry->hard_iface,
 					       dest_entry->dest);
 		}
+
 		batadv_hardif_free_ref(dest_entry->hard_iface);
 		list_del(&dest_entry->list);
 		kfree(dest_entry);

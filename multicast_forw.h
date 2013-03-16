@@ -24,7 +24,8 @@
 
 void batadv_mcast_forw_if_entry_prep(struct hlist_head *forw_if_list,
 				     int16_t if_num,
-				     uint8_t *neigh_addr);
+				     uint8_t *neigh_addr,
+				     bool is_compat);
 struct hlist_head *batadv_mcast_forw_table_entry_prep(
 				struct hlist_head *forw_table,
 				uint8_t *mcast_addr, uint8_t *orig);

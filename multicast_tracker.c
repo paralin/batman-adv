@@ -712,7 +712,8 @@ static int batadv_mcast_add_router_of_dest(
 
 	if (forw_if_list)
 		batadv_mcast_forw_if_entry_prep(forw_if_list, if_num,
-						next_hop_entry->dest);
+						next_hop_entry->dest,
+						next_hop_entry->is_compat);
 
 	list_for_each_entry(next_hop_tmp, &next_hops->list, list)
 		if (!memcmp(next_hop_tmp->dest, next_hop_entry->dest,
