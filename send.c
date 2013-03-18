@@ -217,12 +217,9 @@ _batadv_add_bcast_packet_to_list(struct batadv_priv *bat_priv,
 				 struct batadv_forw_packet *forw_packet,
 				 unsigned long send_time)
 {
-	/* add new packet to packet list and start its timer */
-	spin_lock_bh(&bat_priv->forw_bcast_list_lock);
 	hlist_add_head(&forw_packet->list, &bat_priv->forw_bcast_list);
 	queue_delayed_work(batadv_event_workqueue, &forw_packet->delayed_work,
 			   send_time);
-	spin_unlock_bh(&bat_priv->forw_bcast_list_lock);
 }
 
 /* add a broadcast packet to the queue and setup timers. broadcast packets
@@ -272,7 +269,10 @@ int batadv_add_bcast_packet_to_list(struct batadv_priv *bat_priv,
 	INIT_DELAYED_WORK(&forw_packet->delayed_work,
 			  batadv_send_outstanding_bcast_packet);
 
+	spin_lock_bh(&bat_priv->forw_bcast_list_lock);
 	_batadv_add_bcast_packet_to_list(bat_priv, forw_packet, delay);
+	spin_unlock_bh(&bat_priv->forw_bcast_list_lock);
+
 	return NETDEV_TX_OK;
 
 packet_free:
@@ -295,10 +295,6 @@ static void batadv_send_outstanding_bcast_packet(struct work_struct *work)
 				   delayed_work);
 	soft_iface = forw_packet->if_incoming->soft_iface;
 	bat_priv = netdev_priv(soft_iface);
-
-	spin_lock_bh(&bat_priv->forw_bcast_list_lock);
-	hlist_del(&forw_packet->list);
-	spin_unlock_bh(&bat_priv->forw_bcast_list_lock);
 
 	if (atomic_read(&bat_priv->mesh_state) == BATADV_MESH_DEACTIVATING)
 		goto out;
@@ -327,12 +323,21 @@ static void batadv_send_outstanding_bcast_packet(struct work_struct *work)
 
 	/* if we still have some more bcasts to send */
 	if (forw_packet->num_packets < BATADV_NUM_BCASTS_MAX) {
+		spin_lock_bh(&bat_priv->forw_bcast_list_lock);
+		hlist_del(&forw_packet->list);
+
 		_batadv_add_bcast_packet_to_list(bat_priv, forw_packet,
 						 msecs_to_jiffies(5));
+		spin_unlock_bh(&bat_priv->forw_bcast_list_lock);
+
 		return;
 	}
 
 out:
+	spin_lock_bh(&bat_priv->forw_bcast_list_lock);
+	hlist_del(&forw_packet->list);
+	spin_unlock_bh(&bat_priv->forw_bcast_list_lock);
+
 	batadv_forw_packet_free(forw_packet);
 }
 
