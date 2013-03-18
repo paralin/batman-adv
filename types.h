@@ -855,6 +855,7 @@ struct batadv_skb_cb {
  */
 struct batadv_forw_packet {
 	struct hlist_node list;
+	struct hlist_node canceled_list;
 	unsigned long send_time;
 	uint8_t own;
 	struct sk_buff *skb;

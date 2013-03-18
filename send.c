@@ -324,6 +324,10 @@ static void batadv_send_outstanding_bcast_packet(struct work_struct *work)
 	/* if we still have some more bcasts to send */
 	if (forw_packet->num_packets < BATADV_NUM_BCASTS_MAX) {
 		spin_lock_bh(&bat_priv->forw_bcast_list_lock);
+		if (hlist_unhashed(&forw_packet->list)) {
+			spin_unlock_bh(&bat_priv->forw_bcast_list_lock);
+			return;
+		}
 		hlist_del(&forw_packet->list);
 
 		_batadv_add_bcast_packet_to_list(bat_priv, forw_packet,
@@ -335,6 +339,10 @@ static void batadv_send_outstanding_bcast_packet(struct work_struct *work)
 
 out:
 	spin_lock_bh(&bat_priv->forw_bcast_list_lock);
+	if (hlist_unhashed(&forw_packet->list)) {
+		spin_unlock_bh(&bat_priv->forw_bcast_list_lock);
+		return;
+	}
 	hlist_del(&forw_packet->list);
 	spin_unlock_bh(&bat_priv->forw_bcast_list_lock);
 
@@ -352,6 +360,10 @@ void batadv_send_outstanding_bat_ogm_packet(struct work_struct *work)
 				   delayed_work);
 	bat_priv = netdev_priv(forw_packet->if_incoming->soft_iface);
 	spin_lock_bh(&bat_priv->forw_bat_list_lock);
+	if (hlist_unhashed(&forw_packet->list)) {
+		spin_unlock_bh(&bat_priv->forw_bat_list_lock);
+		return;
+	}
 	hlist_del(&forw_packet->list);
 	spin_unlock_bh(&bat_priv->forw_bat_list_lock);
 
@@ -371,13 +383,87 @@ out:
 	batadv_forw_packet_free(forw_packet);
 }
 
+/**
+ * batadv_cancel_packets - Cancels a list of forward packets
+ * @forw_list:		The to be canceled forward packets
+ * @canceled_list:	The backup list
+ * @hard_iface:		The interface to cancel forward packets for
+ *
+ * This cancels any scheduled forwarding packet tasks in the provided
+ * forw_list for the given hard_iface. If hard_iface is NULL forwarding packets
+ * on all hard interfaces will be canceled.
+ *
+ * The packets are being moved from the forw_list to the canceled_list
+ * and the forward packet list pointer will be unhashed, allowing any already
+ * running task to notice the cancelation.
+ */
+static void batadv_cancel_packets(struct hlist_head *forw_list,
+				  struct hlist_head *canceled_list,
+				  const struct batadv_hard_iface *hard_iface)
+{
+	struct batadv_forw_packet *forw_packet;
+	struct hlist_node *safe_tmp_node;
+
+	hlist_for_each_entry_safe(forw_packet, safe_tmp_node,
+				  forw_list, list) {
+		/* if purge_outstanding_packets() was called with an argument
+		 * we delete only packets belonging to the given interface
+		 */
+		if ((hard_iface) &&
+		    (forw_packet->if_incoming != hard_iface))
+			continue;
+
+		hlist_del_init(&forw_packet->list);
+		hlist_add_head(&forw_packet->canceled_list, canceled_list);
+	}
+}
+
+/**
+ * batadv_canceled_packets_free - Frees canceled forward packets
+ * @head:	A list of to be freed forw_packets
+ *
+ * This function canceles the scheduling of any packet in the provided list,
+ * waits for any possibly running packet forwarding thread to finish and
+ * finally, safely frees this forward packet.
+ *
+ * This function might sleep.
+ */
+static void batadv_canceled_packets_free(struct hlist_head *head)
+{
+	struct batadv_forw_packet *forw_packet;
+	struct hlist_node *safe_tmp_node;
+
+	hlist_for_each_entry_safe(forw_packet, safe_tmp_node, head,
+				  canceled_list) {
+		cancel_delayed_work_sync(&forw_packet->delayed_work);
+
+		hlist_del(&forw_packet->canceled_list);
+		batadv_forw_packet_free(forw_packet);
+	}
+}
+
+/**
+ * batadv_purge_outstanding_packets - Stops/purges scheduled bcast/ogm packets
+ * @bat_priv:	The mesh to cancel and purge bcast/ogm packets for
+ * @hard_iface:	The hard interface to cancel and purge bcast_ogm packets on
+ *
+ * This method cancels and purges any broadcast and ogm packet on the given
+ * hard_iface. If hard_iface is NULL, broadcast and ogm packets on all hard
+ * interfaces will be canceled and purged.
+ *
+ * Note that after this method bcast/ogm callbacks might still be running for
+ * a few instructions (use a flush_workqueue(batadv_event_workqueue) to
+ * wait for them to finish).
+ *
+ * This function might sleep.
+ */
 void
 batadv_purge_outstanding_packets(struct batadv_priv *bat_priv,
 				 const struct batadv_hard_iface *hard_iface)
 {
-	struct batadv_forw_packet *forw_packet;
-	struct hlist_node *safe_tmp_node;
-	bool pending;
+	struct hlist_head head;
+
+	INIT_HLIST_HEAD(&head);
 
 	if (hard_iface)
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
@@ -389,53 +475,13 @@ batadv_purge_outstanding_packets(struct batadv_priv *bat_priv,
 
 	/* free bcast list */
 	spin_lock_bh(&bat_priv->forw_bcast_list_lock);
-	hlist_for_each_entry_safe(forw_packet, safe_tmp_node,
-				  &bat_priv->forw_bcast_list, list) {
-		/* if purge_outstanding_packets() was called with an argument
-		 * we delete only packets belonging to the given interface
-		 */
-		if ((hard_iface) &&
-		    (forw_packet->if_incoming != hard_iface))
-			continue;
-
-		spin_unlock_bh(&bat_priv->forw_bcast_list_lock);
-
-		/* batadv_send_outstanding_bcast_packet() will lock the list to
-		 * delete the item from the list
-		 */
-		pending = cancel_delayed_work_sync(&forw_packet->delayed_work);
-		spin_lock_bh(&bat_priv->forw_bcast_list_lock);
-
-		if (pending) {
-			hlist_del(&forw_packet->list);
-			batadv_forw_packet_free(forw_packet);
-		}
-	}
+	batadv_cancel_packets(&bat_priv->forw_bcast_list, &head, hard_iface);
 	spin_unlock_bh(&bat_priv->forw_bcast_list_lock);
 
 	/* free batman packet list */
 	spin_lock_bh(&bat_priv->forw_bat_list_lock);
-	hlist_for_each_entry_safe(forw_packet, safe_tmp_node,
-				  &bat_priv->forw_bat_list, list) {
-		/* if purge_outstanding_packets() was called with an argument
-		 * we delete only packets belonging to the given interface
-		 */
-		if ((hard_iface) &&
-		    (forw_packet->if_incoming != hard_iface))
-			continue;
-
-		spin_unlock_bh(&bat_priv->forw_bat_list_lock);
-
-		/* send_outstanding_bat_packet() will lock the list to
-		 * delete the item from the list
-		 */
-		pending = cancel_delayed_work_sync(&forw_packet->delayed_work);
-		spin_lock_bh(&bat_priv->forw_bat_list_lock);
-
-		if (pending) {
-			hlist_del(&forw_packet->list);
-			batadv_forw_packet_free(forw_packet);
-		}
-	}
+	batadv_cancel_packets(&bat_priv->forw_bat_list, &head, hard_iface);
 	spin_unlock_bh(&bat_priv->forw_bat_list_lock);
+
+	batadv_canceled_packets_free(&head);
 }
