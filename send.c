@@ -217,14 +217,12 @@ _batadv_add_bcast_packet_to_list(struct batadv_priv *bat_priv,
 				 struct batadv_forw_packet *forw_packet,
 				 unsigned long send_time)
 {
-	/* add new packet to packet list */
+	/* add new packet to packet list and start its timer */
 	spin_lock_bh(&bat_priv->forw_bcast_list_lock);
 	hlist_add_head(&forw_packet->list, &bat_priv->forw_bcast_list);
-	spin_unlock_bh(&bat_priv->forw_bcast_list_lock);
-
-	/* start timer for this packet */
 	queue_delayed_work(batadv_event_workqueue, &forw_packet->delayed_work,
 			   send_time);
+	spin_unlock_bh(&bat_priv->forw_bcast_list_lock);
 }
 
 /* add a broadcast packet to the queue and setup timers. broadcast packets
