@@ -192,6 +192,20 @@ struct batadv_ogm_packet {
 #define BATADV_OGM_HLEN sizeof(struct batadv_ogm_packet)
 
 /**
+ * batadv_icmp_user_packet - used to start an ICMP operation from userspace
+ * @dst: destination node
+ * @version: compat version used by userspace
+ * @cmd_type: the command to start
+ * @arg1: possible argument for the command
+ */
+struct batadv_icmp_user_packet {
+	uint8_t dst[ETH_ALEN];
+	uint8_t version;
+	uint8_t cmd_type;
+	uint32_t arg1;
+};
+
+/**
  * batadv_icmp_header - common members among all the ICMP packets
  * @packet_type: batman-adv packet type, part of the general header
  * @version: batman-adv protocol version, part of the genereal header

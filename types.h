@@ -792,7 +792,7 @@ struct batadv_socket_client {
 struct batadv_socket_packet {
 	struct list_head list;
 	size_t icmp_len;
-	uint8_t icmp_packet[BATADV_ICMP_MAX_PACKET_SIZE];
+	uint8_t packet[0];
 };
 
 /**
