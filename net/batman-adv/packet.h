@@ -285,6 +285,21 @@ struct batadv_elp_packet {
 #define BATADV_ELP_HLEN sizeof(struct batadv_elp_packet)
 
 /**
+ * struct batadv_icmp_user_packet - used to start an ICMP operation from
+ *  userspace
+ * @dst: destination node
+ * @version: compat version used by userspace
+ * @cmd_type: the command to start
+ * @arg1: possible argument for the command
+ */
+struct batadv_icmp_user_packet {
+	u8 dst[ETH_ALEN];
+	u8 version;
+	u8 cmd_type;
+	u32 arg1;
+};
+
+/**
  * struct batadv_icmp_header - common members among all the ICMP packets
  * @packet_type: batman-adv packet type, part of the general header
  * @version: batman-adv protocol version, part of the genereal header

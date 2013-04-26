@@ -997,11 +997,13 @@ struct batadv_socket_client {
  * @list: list node for batadv_socket_client::queue_list
  * @icmp_len: size of the layer2 icmp packet
  * @icmp_packet: layer2 icmp packet
+ * @packet: payload of layer2 icmp packet
  */
 struct batadv_socket_packet {
 	struct list_head list;
 	size_t icmp_len;
 	u8 icmp_packet[BATADV_ICMP_MAX_PACKET_SIZE];
+	u8 packet[0];
 };
 
 #ifdef CONFIG_BATMAN_ADV_BLA
