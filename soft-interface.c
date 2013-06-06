@@ -482,8 +482,12 @@ static int batadv_softif_init_late(struct net_device *dev)
 #ifdef CONFIG_BATMAN_ADV_BLA
 	atomic_set(&bat_priv->bla.num_requests, 0);
 #endif
+	atomic_set(&bat_priv->packet_loss, 0);
 	bat_priv->tt.last_changeset = NULL;
 	bat_priv->tt.last_changeset_len = 0;
+	bat_priv->error_probs[0] = 10;
+	bat_priv->error_probs[1] = 10;
+	bat_priv->error_probs[2] = 30;
 
 	/* randomize initial seqno to avoid collision */
 	get_random_bytes(&random_seqno, sizeof(random_seqno));

@@ -546,9 +546,9 @@ bool batadv_rlnc_skb_add_enc(struct sk_buff *skb,
 				rlnc_pkt->dst, rlnc_pkt->block_id))
 		return true;
 
-	skb_push(skb, hdr_size);
-
 err:
+	kfree_skb(skb);
+
 	return false;
 }
 

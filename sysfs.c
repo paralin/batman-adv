@@ -376,6 +376,7 @@ BATADV_ATTR_SIF_UINT(log_level, S_IRUGO | S_IWUSR, 0, BATADV_DBG_ALL, NULL);
 BATADV_ATTR_SIF_BOOL(network_coding, S_IRUGO | S_IWUSR,
 		     batadv_nc_status_update);
 #endif
+BATADV_ATTR_SIF_UINT(packet_loss, S_IRUGO | S_IWUSR, 0, 100, NULL);
 
 static struct batadv_attribute *batadv_mesh_attrs[] = {
 	&batadv_attr_aggregated_ogms,
@@ -400,6 +401,7 @@ static struct batadv_attribute *batadv_mesh_attrs[] = {
 #ifdef CONFIG_BATMAN_ADV_NC
 	&batadv_attr_network_coding,
 #endif
+	&batadv_attr_packet_loss,
 	NULL,
 };
 

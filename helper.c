@@ -450,6 +450,10 @@ int batadv_hlp_genl_register(struct sk_buff *skb, struct genl_info *info)
 	encoders = nla_get_u32(info->attrs[BATADV_HLP_A_ENCS]);
 	atomic_set(&bat_priv->hlp_block, 0);
 
+	bat_priv->error_probs[0] = nla_get_u32(info->attrs[BATADV_HLP_A_E1]);
+	bat_priv->error_probs[1] = nla_get_u32(info->attrs[BATADV_HLP_A_E2]);
+	bat_priv->error_probs[2] = nla_get_u32(info->attrs[BATADV_HLP_A_E3]);
+
 	bat_priv->genl_portid = info->snd_portid;
 	batadv_hlp_tvlv_container_update(bat_priv, true);
 	batadv_hlp_genl_add_portid(&batadv_genl_portid_head, bat_priv,
@@ -790,6 +794,15 @@ static struct nla_policy batadv_hlp_genl_policy[BATADV_HLP_A_NUM] = {
 		.type = NLA_U16,
 	},
 	[BATADV_HLP_A_ENCS] = {
+		.type = NLA_U32,
+	},
+	[BATADV_HLP_A_E1] = {
+		.type = NLA_U32,
+	},
+	[BATADV_HLP_A_E2] = {
+		.type = NLA_U32,
+	},
+	[BATADV_HLP_A_E3] = {
 		.type = NLA_U32,
 	},
 };

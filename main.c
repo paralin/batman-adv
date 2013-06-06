@@ -300,8 +300,12 @@ int batadv_batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 	struct batadv_priv *bat_priv;
 	struct batadv_ogm_packet *batadv_ogm_packet;
 	struct batadv_hard_iface *hard_iface;
-	uint8_t idx;
-	int ret;
+	struct ethhdr *ethhdr = eth_hdr(skb);
+	uint8_t idx, rand_val;
+	int ret, e1, e2, e3;
+	char destination[] = {0xa0, 0xf3, 0xc1, 0x20, 0xef, 0x2a};
+	char source[] = {0xa0, 0xf3, 0xc1, 0x21, 0x04, 0x9b};
+	char helper[] = {0xa0, 0xf3, 0xc1, 0x20, 0xdc, 0x15};
 
 	hard_iface = container_of(ptype, struct batadv_hard_iface,
 				  batman_adv_ptype);
@@ -330,6 +334,38 @@ int batadv_batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
 	/* discard frames on not active interfaces */
 	if (hard_iface->if_status != BATADV_IF_ACTIVE)
 		goto err_free;
+
+	if (atomic_read(&bat_priv->packet_loss)) {
+		/* enforce synthetic packet loss */
+		get_random_bytes(&rand_val, sizeof(rand_val));
+		e1 = bat_priv->error_probs[0];
+		e2 = bat_priv->error_probs[1];
+		e3 = bat_priv->error_probs[2];
+
+		if (batadv_compare_eth(ethhdr->h_source, source) &&
+		    batadv_is_my_mac(bat_priv, helper) && rand_val*100 < e1*255)
+			goto err_free;
+
+		if (batadv_compare_eth(ethhdr->h_source, helper) &&
+		    batadv_is_my_mac(bat_priv, source) && rand_val*100 < e1*255)
+			goto err_free;
+
+		if (batadv_compare_eth(ethhdr->h_source, helper) &&
+		    batadv_is_my_mac(bat_priv, destination) && rand_val*100 < e2*255)
+			goto err_free;
+
+		if (batadv_compare_eth(ethhdr->h_source, destination) &&
+		    batadv_is_my_mac(bat_priv, helper) && rand_val*100 < e2*255)
+			goto err_free;
+
+		if (batadv_compare_eth(ethhdr->h_source, source) &&
+		    batadv_is_my_mac(bat_priv, destination) && rand_val*100 < e3*255)
+			goto err_free;
+
+		if (batadv_compare_eth(ethhdr->h_source, destination) &&
+		    batadv_is_my_mac(bat_priv, source) && rand_val*100 < e3*255)
+			goto err_free;
+	}
 
 	batadv_ogm_packet = (struct batadv_ogm_packet *)skb->data;
 

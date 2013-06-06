@@ -55,6 +55,9 @@ enum {
 	BATADV_HLP_A_RANK,
 	BATADV_HLP_A_SEQ,
 	BATADV_HLP_A_ENCS,
+	BATADV_HLP_A_E1,
+	BATADV_HLP_A_E2,
+	BATADV_HLP_A_E3,
 	BATADV_HLP_A_NUM,
 };
 #define BATADV_HLP_A_MAX (BATADV_HLP_A_NUM - 1)
@@ -678,6 +681,7 @@ struct batadv_priv {
 	atomic_t bcast_seqno;
 	atomic_t bcast_queue_left;
 	atomic_t batman_queue_left;
+	atomic_t packet_loss;
 	char num_ifaces;
 	struct kobject *mesh_obj;
 	struct dentry *debug_dir;
@@ -711,6 +715,7 @@ struct batadv_priv {
 	struct genl_family hlp_genl_family;
 	u32 genl_portid;
 	atomic_t hlp_block; /* int */
+	u32 error_probs[3];
 #endif
 };
 
