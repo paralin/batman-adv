@@ -1029,10 +1029,21 @@ struct batadv_algo_ops {
 };
 
 /**
+ * struct batadv_dat_key_ipv4 - key of a DAT IPv4 entry
+ * @ipv4: the IPv4 address
+ * @vid: the identifier of the VLAN which the ip belongs to
+ */
+struct batadv_dat_key_ipv4 {
+	__be32 ipv4;
+	unsigned short vid;
+};
+
+/**
  * struct batadv_dat_entry - it is a single entry of batman-adv ARP backend. It
  * is used to stored ARP entries needed for the global DAT cache
- * @ip: the IPv4 corresponding to this DAT/ARP entry
- * @mac_addr: the MAC address associated to the stored IPv4
+ * @key: the key corresponding to this DAT entry
+ * @value: the value corresponding to this DAT entry
+ * @type: the type of the DAT entry
  * @vid: the vlan ID associated to this entry
  * @last_update: time in jiffies when this entry was refreshed last time
  * @hash_entry: hlist node for batadv_priv_dat::hash
@@ -1040,13 +1051,35 @@ struct batadv_algo_ops {
  * @rcu: struct used for freeing in an RCU-safe manner
  */
 struct batadv_dat_entry {
-	__be32 ip;
-	uint8_t mac_addr[ETH_ALEN];
-	unsigned short vid;
+	void *key;
+	void *value;
+	uint8_t type;
 	unsigned long last_update;
 	struct hlist_node hash_entry;
 	atomic_t refcount;
 	struct rcu_head rcu;
+};
+
+/**
+ * batadv_dat_types - possible types for DAT entries
+ * @BATADV_DAT_IPV4: IPv4 address type
+ */
+enum batadv_dat_types {
+	BATADV_DAT_IPV4 = 0,
+};
+
+/**
+ * batadv_dat_type_info - info needed for a DAT type
+ * @key_size: the size of the DAT entry key
+ * @key_str_fmt: string format used by key
+ * @value_size: the size of the value
+ * @value_str_fmt: string format used by value
+ */
+struct batadv_dat_type_info {
+	size_t key_size;
+	char *(*key_to_str)(void *key);
+	size_t value_size;
+	char *(*value_to_str)(void *value);
 };
 
 /**

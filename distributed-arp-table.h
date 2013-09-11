@@ -28,6 +28,8 @@
 #include <linux/if_arp.h>
 
 #define BATADV_DAT_ADDR_MAX ((batadv_dat_addr_t)~(batadv_dat_addr_t)0)
+#define BATADV_DAT_KEY_MAX_LEN 16
+#define BATADV_DAT_VALUE_MAX_LEN 18
 
 void batadv_dat_status_update(struct net_device *net_dev);
 bool batadv_dat_snoop_outgoing_arp_request(struct batadv_priv *bat_priv,
