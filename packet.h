@@ -199,6 +199,9 @@ struct batadv_ogm_packet {
  * @dst: address of the destination node
  * @orig: address of the source node
  * @uid: local ICMP socket identifier
+ * @rr_cur: for record route packets: number of entries the rr array,
+ *  reserved for other packet types.
+ * @seqno: ICMP sequence number
  */
 struct batadv_icmp_header {
 	uint8_t  packet_type;
@@ -208,18 +211,16 @@ struct batadv_icmp_header {
 	uint8_t  dst[ETH_ALEN];
 	uint8_t  orig[ETH_ALEN];
 	uint8_t  uid;
+	uint8_t  rr_cur;
+	__be16   seqno;
 };
 
 /**
  * batadv_icmp_packet - ICMP packet
  * @icmph: common ICMP header
- * @reserved: not used - useful for alignment
- * @seqno: ICMP sequence number
  */
 struct batadv_icmp_packet {
 	struct batadv_icmp_header icmph;
-	uint8_t  reserved;
-	__be16   seqno;
 };
 
 #define BATADV_RR_LEN 16
@@ -227,14 +228,10 @@ struct batadv_icmp_packet {
 /**
  * batadv_icmp_packet_rr - ICMP RouteRecord packet
  * @icmph: common ICMP header
- * @rr_cur: number of entries the rr array
- * @seqno: ICMP sequence number
  * @rr: route record array
  */
 struct batadv_icmp_packet_rr {
 	struct batadv_icmp_header icmph;
-	uint8_t  rr_cur;
-	__be16   seqno;
 	uint8_t  rr[BATADV_RR_LEN][ETH_ALEN];
 };
 

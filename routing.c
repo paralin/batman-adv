@@ -421,12 +421,12 @@ int batadv_recv_icmp_packet(struct sk_buff *skb,
 
 		icmph = (struct batadv_icmp_header *)skb->data;
 		icmp_packet_rr = (struct batadv_icmp_packet_rr *)icmph;
-		if (icmp_packet_rr->rr_cur >= BATADV_RR_LEN)
+		if (icmp_packet_rr->icmph.rr_cur >= BATADV_RR_LEN)
 			goto out;
 
-		memcpy(&(icmp_packet_rr->rr[icmp_packet_rr->rr_cur]),
+		memcpy(&(icmp_packet_rr->rr[icmp_packet_rr->icmph.rr_cur]),
 		       ethhdr->h_dest, ETH_ALEN);
-		icmp_packet_rr->rr_cur++;
+		icmp_packet_rr->icmph.rr_cur++;
 	}
 
 	/* packet for me */
