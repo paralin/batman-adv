@@ -429,6 +429,23 @@ static void batadv_recv_handler_init(void)
 	BUILD_BUG_ON(offsetof(struct batadv_icmp_packet, icmph.dst) != 4);
 	BUILD_BUG_ON(offsetof(struct batadv_icmp_packet_rr, icmph.dst) != 4);
 
+	BUILD_BUG_ON(sizeof(struct batadv_bla_claim_dst) != 6);
+	BUILD_BUG_ON(sizeof(struct batadv_ogm_packet) != 24);
+	BUILD_BUG_ON(sizeof(struct batadv_icmp_header) != 20);
+	BUILD_BUG_ON(sizeof(struct batadv_icmp_packet) != 20);
+	BUILD_BUG_ON(sizeof(struct batadv_icmp_packet_rr) != 116);
+	BUILD_BUG_ON(sizeof(struct batadv_unicast_packet) != 10);
+	BUILD_BUG_ON(sizeof(struct batadv_unicast_4addr_packet) != 18);
+	BUILD_BUG_ON(sizeof(struct batadv_frag_packet) != 20);
+	BUILD_BUG_ON(sizeof(struct batadv_bcast_packet) != 14);
+	BUILD_BUG_ON(sizeof(struct batadv_coded_packet) != 46);
+	BUILD_BUG_ON(sizeof(struct batadv_unicast_tvlv_packet) != 20);
+	BUILD_BUG_ON(sizeof(struct batadv_tvlv_hdr) != 4);
+	BUILD_BUG_ON(sizeof(struct batadv_tvlv_gateway_data) != 8);
+	BUILD_BUG_ON(sizeof(struct batadv_tvlv_tt_vlan_data) != 8);
+//	BUILD_BUG_ON(sizeof(struct batadv_tvlv_tt_change) != 10);
+	BUILD_BUG_ON(sizeof(struct batadv_tvlv_roam_adv) != 8);
+
 	/* broadcast packet */
 	batadv_rx_handler[BATADV_BCAST] = batadv_recv_bcast_packet;
 
