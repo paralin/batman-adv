@@ -32,6 +32,23 @@
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
 
+static inline bool dev_xmit_complete(int rc)
+{
+	/* successful transmission */
+	if (rc == NETDEV_TX_OK)
+		return true;
+
+	/* error while transmitting, driver consumed skb */
+	if (rc < 0)
+		return true;
+
+	/* error while queueing to a different device, driver consumed skb */
+	if (rc & NET_XMIT_MASK)
+		return true;
+
+	return false;
+}
+
 #define unregister_netdevice_queue(dev, head) unregister_netdevice(dev)
 
 #endif /* < KERNEL_VERSION(2, 6, 33) */
