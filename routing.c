@@ -228,7 +228,10 @@ static int batadv_recv_my_icmp_packet(struct batadv_priv *bat_priv,
 		icmph->ttl = BATADV_TTL;
 
 		res = batadv_send_skb_to_orig(skb, orig_node, NULL);
-		if (res != NET_XMIT_DROP)
+		if (res == -1)
+			goto out;
+
+		if (dev_xmit_complete(res))
 			ret = NET_RX_SUCCESS;
 
 		break;
@@ -257,7 +260,7 @@ static int batadv_recv_icmp_ttl_exceeded(struct batadv_priv *bat_priv,
 	struct batadv_hard_iface *primary_if = NULL;
 	struct batadv_orig_node *orig_node = NULL;
 	struct batadv_icmp_packet *icmp_packet;
-	int ret = NET_RX_DROP;
+	int res, ret = NET_RX_DROP;
 
 	icmp_packet = (struct batadv_icmp_packet *)skb->data;
 
@@ -289,7 +292,8 @@ static int batadv_recv_icmp_ttl_exceeded(struct batadv_priv *bat_priv,
 	icmp_packet->msg_type = BATADV_TTL_EXCEEDED;
 	icmp_packet->ttl = BATADV_TTL;
 
-	if (batadv_send_skb_to_orig(skb, orig_node, NULL) != NET_XMIT_DROP)
+	res = batadv_send_skb_to_orig(skb, orig_node, NULL);
+	if (res != -1 && dev_xmit_complete(res))
 		ret = NET_RX_SUCCESS;
 
 out:
@@ -310,7 +314,7 @@ int batadv_recv_icmp_packet(struct sk_buff *skb,
 	struct ethhdr *ethhdr;
 	struct batadv_orig_node *orig_node = NULL;
 	int hdr_size = sizeof(struct batadv_icmp_header);
-	int ret = NET_RX_DROP;
+	int res, ret = NET_RX_DROP;
 
 	/* drop packet if it has not necessary minimum size */
 	if (unlikely(!pskb_may_pull(skb, hdr_size)))
@@ -376,7 +380,8 @@ int batadv_recv_icmp_packet(struct sk_buff *skb,
 	icmph->ttl--;
 
 	/* route it */
-	if (batadv_send_skb_to_orig(skb, orig_node, recv_if) != NET_XMIT_DROP)
+	res = batadv_send_skb_to_orig(skb, orig_node, recv_if);
+	if (res != -1 && dev_xmit_complete(res))
 		ret = NET_RX_SUCCESS;
 
 out:
@@ -608,6 +613,8 @@ static int batadv_route_unicast_packet(struct sk_buff *skb,
 		batadv_skb_set_priority(skb, hdr_len);
 
 	res = batadv_send_skb_to_orig(skb, orig_node, recv_if);
+	if (res == -1)
+		goto out;
 
 	/* translate transmit result into receive result */
 	if (res == NET_XMIT_SUCCESS) {
@@ -615,12 +622,9 @@ static int batadv_route_unicast_packet(struct sk_buff *skb,
 		batadv_inc_counter(bat_priv, BATADV_CNT_FORWARD);
 		batadv_add_counter(bat_priv, BATADV_CNT_FORWARD_BYTES,
 				   skb->len + ETH_HLEN);
-
-		ret = NET_RX_SUCCESS;
-	} else if (res == NET_XMIT_POLICED) {
-		/* skb was buffered and consumed */
-		ret = NET_RX_SUCCESS;
 	}
+	if (dev_xmit_complete(res))
+		ret = NET_RX_SUCCESS;
 
 out:
 	if (orig_node)
