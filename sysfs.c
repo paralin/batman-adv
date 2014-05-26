@@ -25,6 +25,7 @@
 #include "soft-interface.h"
 #include "gateway_common.h"
 #include "gateway_client.h"
+#include <net/net_namespace.h>
 
 static struct net_device *batadv_kobj_to_netdev(struct kobject *obj)
 {
@@ -754,6 +755,7 @@ static ssize_t batadv_store_mesh_iface(struct kobject *kobj,
 				       size_t count)
 {
 	struct net_device *net_dev = batadv_kobj_to_netdev(kobj);
+	struct net *net = dev_net(net_dev);
 	struct batadv_hard_iface *hard_iface;
 	int status_tmp = -1;
 	int ret = count;
@@ -797,7 +799,7 @@ static ssize_t batadv_store_mesh_iface(struct kobject *kobj,
 		batadv_hardif_disable_interface(hard_iface,
 						BATADV_IF_CLEANUP_AUTO);
 
-	ret = batadv_hardif_enable_interface(hard_iface, buff);
+	ret = batadv_hardif_enable_interface(hard_iface, net, buff);
 
 unlock:
 	rtnl_unlock();

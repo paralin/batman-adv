@@ -31,6 +31,7 @@
 
 #include <linux/if_arp.h>
 #include <linux/if_ether.h>
+#include <net/net_namespace.h>
 
 void batadv_hardif_free_rcu(struct rcu_head *rcu)
 {
@@ -76,6 +77,7 @@ out:
 static bool batadv_is_on_batman_iface(const struct net_device *net_dev)
 {
 	struct net_device *parent_dev;
+	struct net *net = dev_net(net_dev);
 	bool ret;
 
 	/* check if this is a batman-adv mesh interface */
@@ -87,7 +89,7 @@ static bool batadv_is_on_batman_iface(const struct net_device *net_dev)
 		return false;
 
 	/* recurse over the parent device */
-	parent_dev = __dev_get_by_index(&init_net, net_dev->iflink);
+	parent_dev = __dev_get_by_index(net, net_dev->iflink);
 	/* if we got a NULL parent_dev there is something broken.. */
 	if (WARN(!parent_dev, "Cannot find parent device"))
 		return false;
@@ -365,7 +367,7 @@ static int batadv_master_del_slave(struct batadv_hard_iface *slave,
 }
 
 int batadv_hardif_enable_interface(struct batadv_hard_iface *hard_iface,
-				   const char *iface_name)
+				   struct net *net, const char *iface_name)
 {
 	struct batadv_priv *bat_priv;
 	struct net_device *soft_iface, *master;
@@ -379,10 +381,10 @@ int batadv_hardif_enable_interface(struct batadv_hard_iface *hard_iface,
 	if (!atomic_inc_not_zero(&hard_iface->refcount))
 		goto out;
 
-	soft_iface = dev_get_by_name(&init_net, iface_name);
+	soft_iface = dev_get_by_name(net, iface_name);
 
 	if (!soft_iface) {
-		soft_iface = batadv_softif_create(iface_name);
+		soft_iface = batadv_softif_create(net, iface_name);
 
 		if (!soft_iface) {
 			ret = -ENOMEM;

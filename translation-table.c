@@ -27,6 +27,7 @@
 #include "multicast.h"
 
 #include <linux/crc32c.h>
+#include <net/net_namespace.h>
 
 /* hash class keys */
 static struct lock_class_key batadv_tt_local_hash_lock_class_key;
@@ -513,6 +514,7 @@ bool batadv_tt_local_add(struct net_device *soft_iface, const uint8_t *addr,
 	struct batadv_tt_global_entry *tt_global = NULL;
 	struct batadv_softif_vlan *vlan;
 	struct net_device *in_dev = NULL;
+	struct net *net = dev_net(soft_iface);
 	struct hlist_head *head;
 	struct batadv_tt_orig_list_entry *orig_entry;
 	int hash_added, table_size, packet_size_max;
@@ -521,7 +523,7 @@ bool batadv_tt_local_add(struct net_device *soft_iface, const uint8_t *addr,
 	uint32_t match_mark;
 
 	if (ifindex != BATADV_NULL_IFINDEX)
-		in_dev = dev_get_by_index(&init_net, ifindex);
+		in_dev = dev_get_by_index(net, ifindex);
 
 	tt_local = batadv_tt_local_hash_find(bat_priv, addr, vid);
 
