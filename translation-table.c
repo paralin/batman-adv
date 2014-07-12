@@ -176,8 +176,23 @@ batadv_tt_global_hash_find(struct batadv_priv *bat_priv, const uint8_t *addr,
 static void
 batadv_tt_local_entry_free_ref(struct batadv_tt_local_entry *tt_local_entry)
 {
-	if (atomic_dec_and_test(&tt_local_entry->common.refcount))
+	struct batadv_orig_node *best_orig;
+
+	if (atomic_dec_and_test(&tt_local_entry->common.refcount)) {
+		rcu_read_lock();
+		best_orig = rcu_dereference(tt_local_entry->prev_orig);
+		rcu_read_unlock();
+
+		if (best_orig) {
+			spin_lock_bh(&best_orig->tt_lock);
+			rcu_assign_pointer(tt_local_entry->prev_orig, NULL);
+			spin_unlock_bh(&best_orig->tt_lock);
+
+			batadv_orig_node_free_ref(best_orig);
+		}
+
 		kfree_rcu(tt_local_entry, common.rcu);
+	}
 }
 
 /**
@@ -510,6 +525,7 @@ bool batadv_tt_local_add(struct net_device *soft_iface, const uint8_t *addr,
 			 unsigned short vid, int ifindex, uint32_t mark)
 {
 	struct batadv_priv *bat_priv = netdev_priv(soft_iface);
+	struct batadv_orig_node *best_orig;
 	struct batadv_tt_local_entry *tt_local;
 	struct batadv_tt_global_entry *tt_global = NULL;
 	struct batadv_softif_vlan *vlan;
@@ -596,6 +612,8 @@ bool batadv_tt_local_add(struct net_device *soft_iface, const uint8_t *addr,
 	tt_local->last_seen = jiffies;
 	tt_local->common.added_at = tt_local->last_seen;
 
+	rcu_assign_pointer(tt_local->prev_orig, NULL);
+
 	/* the batman interface mac and multicast addresses should never be
 	 * purged
 	 */
@@ -622,6 +640,25 @@ check_roaming:
 	 * process has already been handled
 	 */
 	if (tt_global && !(tt_global->common.flags & BATADV_TT_CLIENT_ROAM)) {
+		/* This isn't optimal: over time the best_orig towards a
+		 * bla-backbone might change; forwarding an unsol. Neighbor
+		 * Advertisement / grat. ARP reply later could result in a
+		 * temporary, quick route flap because of triggering a
+		 * bla-claim switch
+		 */
+		best_orig = batadv_transtable_search(bat_priv, NULL,
+						     tt_global->common.addr,
+						     tt_global->common.vid);
+		if (best_orig) {
+			/* TODO: is this a good lock to synchronize with?
+			 * i.e. check whether we will always get the same
+			 * best_orig->tt_lock for a tt_local->prev_orig assignment
+			 */
+			spin_lock_bh(&best_orig->tt_lock);
+			rcu_assign_pointer(tt_local->prev_orig, best_orig);
+			spin_unlock_bh(&best_orig->tt_lock);
+		}
+
 		/* These node are probably going to update their tt table */
 		head = &tt_global->orig_list;
 		rcu_read_lock();
@@ -3711,4 +3748,27 @@ bool batadv_tt_global_is_isolated(struct batadv_priv *bat_priv,
 	batadv_tt_global_entry_free_ref(tt);
 
 	return ret;
+}
+
+struct batadv_orig_node *batadv_tt_get_prev_orig(struct batadv_priv *bat_priv,
+						 const uint8_t *addr,
+						 unsigned short vid)
+{
+	struct batadv_tt_local_entry *tt;
+	struct batadv_orig_node *orig;
+
+	tt = batadv_tt_local_hash_find(bat_priv, addr, vid);
+	if (!tt)
+		return NULL;
+
+	rcu_read_lock();
+
+	orig = rcu_dereference(tt->prev_orig);
+	if (!orig || !atomic_inc_not_zero(&orig->refcount))
+		orig = NULL;
+
+	rcu_read_unlock();
+
+	batadv_tt_local_entry_free_ref(tt);
+	return orig;
 }

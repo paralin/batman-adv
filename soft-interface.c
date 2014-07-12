@@ -156,6 +156,113 @@ static void batadv_interface_set_rx_mode(struct net_device *dev)
 {
 }
 
+static bool
+batadv_is_ipv4_grat_reply(struct batadv_priv *bat_priv,
+			  struct sk_buff *skb)
+{
+	struct arphdr *arphdr;
+	__be32 ip_dst;
+	uint8_t *hw_dst;
+	int hdr_size = 0;
+
+	/* pull the ARP payload */
+	if (unlikely(!pskb_may_pull(skb, hdr_size + ETH_HLEN +
+				    arp_hdr_len(skb->dev))))
+		return false;
+
+	arphdr = (struct arphdr *)(skb->data + hdr_size + ETH_HLEN);
+
+	/* check whether the ARP packet carries a valid IP information */
+	if (arphdr->ar_hrd != htons(ARPHRD_ETHER) ||
+	    arphdr->ar_pro != htons(ETH_P_IP) ||
+	    arphdr->ar_hln != ETH_ALEN ||
+	    arphdr->ar_pln != 4)
+		return false;
+
+	hw_dst = (uint8_t *)arphdr + sizeof(*arphdr) + ETH_ALEN + 4;
+	ip_dst = *((__be32 *)(hw_dst + ETH_ALEN));
+
+	/* gratouitous ARP reply */
+	if (arphdr->ar_op != htons(ARPOP_REPLY) ||
+	    !is_broadcast_ether_addr(hw_dst) ||
+	    !ipv4_is_lbcast(ip_dst))
+		return false;
+
+	return true;
+}
+
+static bool
+batadv_is_ipv6_unsol_neighadv(struct batadv_priv *bat_priv,
+			      struct sk_buff *skb)
+{
+	const struct ipv6hdr *ip6h;
+	struct nd_msg *ndm;
+	__be16 frag_off;
+	u8 nexthdr;
+	unsigned int len = sizeof(struct ethhdr) + sizeof(*ip6h);
+
+	if (!pskb_may_pull(skb, len))
+		return false;
+
+	ip6h = ipv6_hdr(skb);
+
+	if (ip6h->version != 6 || ip6h->payload_len == 0 ||
+	    !ipv6_addr_is_ll_all_nodes(&ip6h->daddr))
+		return false;
+
+	if (skb->len < len + ntohs(ip6h->payload_len))
+		return false;
+
+	nexthdr = ip6h->nexthdr;
+	len = ipv6_skip_exthdr(skb, len, &nexthdr, &frag_off);
+
+	/* TODO: validate checksum */
+
+	if (len < 0 || nexthdr != IPPROTO_ICMPV6)
+		return false;
+
+	if (!pskb_may_pull(skb, len + sizeof(*ndm)))
+		return false;
+
+	ndm = (struct nd_msg *)icmp6_hdr(skb);
+
+	if (ndm->icmph.icmp6_type != NDISC_NEIGHBOUR_ADVERTISEMENT ||
+	    ndm->icmph.icmp6_solicited)
+		return false;
+
+	return true;
+}
+
+static bool
+batadv_is_ip_neigh_bcast(struct batadv_priv *bat_priv,
+			 struct sk_buff *skb,
+			 struct batadv_orig_node **mcast_single_orig,
+			 unsigned short vid)
+{
+	struct ethhdr *ethhdr = eth_hdr(skb);
+	int ret;
+
+	switch (ntohs(ethhdr->h_proto)) {
+	case ETH_P_ARP:
+		ret = batadv_is_ipv4_grat_reply(bat_priv, skb);
+		break;
+	case ETH_P_IPV6:
+		ret = batadv_is_ipv6_unsol_neighadv(bat_priv, skb);
+		break;
+	default:
+		ret = false;
+	}
+
+	if (!ret)
+		goto out;
+
+	ethhdr = eth_hdr(skb);
+	*mcast_single_orig = batadv_tt_get_prev_orig(bat_priv, ethhdr->h_source,
+						     vid);
+out:
+	return ret;
+}
+
 static int batadv_interface_tx(struct sk_buff *skb,
 			       struct net_device *soft_iface)
 {
@@ -268,6 +375,14 @@ send:
 			if (forw_mode == BATADV_FORW_SINGLE)
 				do_bcast = false;
 		}
+
+		if (do_bcast &&
+		    batadv_is_ip_neigh_bcast(bat_priv, skb,
+					     &mcast_single_orig, vid))
+			if (!mcast_single_orig)
+				goto dropped;
+
+			do_bcast = false;
 	}
 
 	batadv_skb_set_priority(skb, 0);

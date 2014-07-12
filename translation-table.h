@@ -52,5 +52,8 @@ bool batadv_tt_add_temporary_global_entry(struct batadv_priv *bat_priv,
 					  unsigned short vid);
 bool batadv_tt_global_is_isolated(struct batadv_priv *bat_priv,
 				  const uint8_t *addr, unsigned short vid);
+struct batadv_orig_node *batadv_tt_get_prev_orig(struct batadv_priv *bat_priv,
+						 const uint8_t *addr,
+						 unsigned short vid);
 
 #endif /* _NET_BATMAN_ADV_TRANSLATION_TABLE_H_ */

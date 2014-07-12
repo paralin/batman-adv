@@ -934,6 +934,7 @@ struct batadv_tt_common_entry {
  */
 struct batadv_tt_local_entry {
 	struct batadv_tt_common_entry common;
+	struct batadv_orig_node __rcu *prev_orig; /* rcu protected pointer */
 	unsigned long last_seen;
 };
 
