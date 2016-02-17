@@ -22,6 +22,7 @@
 #include <linux/atomic.h>
 #include <linux/bug.h>
 #include <linux/byteorder/generic.h>
+#include <linux/cache.h>
 #include <linux/compiler.h>
 #include <linux/completion.h>
 #include <linux/device.h>
@@ -36,6 +37,7 @@
 #include <linux/netdevice.h>
 #include <linux/param.h>
 #include <linux/printk.h>
+#include <linux/random.h>
 #include <linux/rculist.h>
 #include <linux/rcupdate.h>
 #include <linux/sched.h>
@@ -84,6 +86,8 @@
 #define BATADV_TP_FIRST_SEQ ((u32)-1 - 2000)
 
 #define PACKET_LEN 1450
+
+static u8 batadv_tp_prerandom[4096] __read_mostly;
 
 /**
  * batadv_tp_cwnd - compute the new cwnd size
@@ -443,7 +447,40 @@ static void batadv_tp_sender_timeout(unsigned long arg)
 }
 
 /**
+ * batadv_tp_fill_prerandom - Fill buffer with prefetched random bytes
+ * @tp_vars: the private TP meter data for this session
+ * @buf: Buffer to fill with bytes
+ * @nbytes: amount of pseudorandom bytes
+ */
+static void batadv_tp_fill_prerandom(struct batadv_tp_vars *tp_vars,
+				     u8 *buf, size_t nbytes)
+{
+	u32 local_offset;
+	size_t bytes_inbuf;
+	size_t to_copy;
+	size_t pos = 0;
+
+	spin_lock_bh(&tp_vars->prerandom_lock);
+	local_offset = tp_vars->prerandom_offset;
+	tp_vars->prerandom_offset += nbytes;
+	tp_vars->prerandom_offset %= sizeof(batadv_tp_prerandom);
+	spin_unlock_bh(&tp_vars->prerandom_lock);
+
+	while (nbytes) {
+		local_offset %= sizeof(batadv_tp_prerandom);
+		bytes_inbuf = sizeof(batadv_tp_prerandom) - local_offset;
+		to_copy = min(nbytes, bytes_inbuf);
+
+		memcpy(&buf[pos], &batadv_tp_prerandom[local_offset], to_copy);
+		pos += to_copy;
+		nbytes -= to_copy;
+		local_offset = 0;
+	}
+}
+
+/**
  * batadv_tp_send_msg - send a single message
+ * @tp_vars: the private TP meter data for this session
  * @src: source mac address
  * @orig_node: the originator of the destination
  * @seqno: sequence number of this packet
@@ -456,20 +493,23 @@ static void batadv_tp_sender_timeout(unsigned long arg)
  * Return: 0 on success, BATADV_TP_DST_UNREACHABLE if the destination is not
  * reachable, BATADV_TP_MEMORY_ERROR if the packet couldn't be allocated
  */
-static int batadv_tp_send_msg(const u8 *src, struct batadv_orig_node *orig_node,
+static int batadv_tp_send_msg(struct batadv_tp_vars *tp_vars, const u8 *src,
+			      struct batadv_orig_node *orig_node,
 			      u32 seqno, size_t len, int socket_index,
 			      u32 timestamp)
 {
 	struct batadv_icmp_tp_packet *icmp;
 	struct sk_buff *skb;
 	int r;
+	u8 *data;
+	size_t data_len;
 
 	skb = netdev_alloc_skb_ip_align(NULL, len + ETH_HLEN);
 	if (unlikely(!skb))
 		return BATADV_TP_MEMORY_ERROR;
 
 	skb_reserve(skb, ETH_HLEN);
-	icmp = (struct batadv_icmp_tp_packet *)skb_put(skb, len);
+	icmp = (struct batadv_icmp_tp_packet *)skb_put(skb, sizeof(*icmp));
 
 	/* fill the icmp header */
 	ether_addr_copy(icmp->dst, orig_node->orig);
@@ -484,7 +524,13 @@ static int batadv_tp_send_msg(const u8 *src, struct batadv_orig_node *orig_node,
 	icmp->seqno = htonl(seqno);
 	icmp->timestamp = htonl(timestamp);
 
-	/* TODO WAIT - we are sending uninitialized data? */
+	data_len = len - sizeof(*icmp);
+	data = (u8 *)skb_put(skb, data_len);
+	/* TODO decide which approach to take */
+	//memset(data, 0, data_len);
+	//get_random_bytes(data, data_len);
+	batadv_tp_fill_prerandom(tp_vars, data, data_len);
+
 	r = batadv_send_skb_to_orig(skb, orig_node, NULL);
 	if (r < 0)
 		kfree_skb(skb);
@@ -560,7 +606,7 @@ static void batadv_tp_recv_ack(struct batadv_priv *bat_priv,
 			goto out;
 
 		/* if this is the third duplicate ACK do Fast Retransmit */
-		batadv_tp_send_msg(primary_if->net_dev->dev_addr,
+		batadv_tp_send_msg(tp_vars, primary_if->net_dev->dev_addr,
 				   orig_node, recv_ack, packet_len,
 				   icmp->uid, jiffies_to_msecs(jiffies));
 
@@ -598,7 +644,7 @@ static void batadv_tp_recv_ack(struct batadv_priv *bat_priv,
 				 * Section 3.2 of RFC6582 for details)
 				 */
 				dev_addr = primary_if->net_dev->dev_addr;
-				batadv_tp_send_msg(dev_addr,
+				batadv_tp_send_msg(tp_vars, dev_addr,
 						   orig_node, recv_ack,
 						   packet_len, icmp->uid,
 						   jiffies_to_msecs(jiffies));
@@ -732,7 +778,7 @@ static int batadv_tp_send(void *arg)
 		 */
 		packet_len = payload_len + sizeof(struct batadv_unicast_packet);
 
-		err = batadv_tp_send_msg(primary_if->net_dev->dev_addr,
+		err = batadv_tp_send_msg(tp_vars, primary_if->net_dev->dev_addr,
 					 orig_node, tp_vars->last_sent,
 					 packet_len,
 					 tp_vars->socket_client->index,
@@ -888,6 +934,9 @@ void batadv_tp_start(struct batadv_socket_client *socket_client, const u8 *dst,
 	INIT_LIST_HEAD(&tp_vars->unacked_list);
 
 	spin_lock_init(&tp_vars->cwnd_lock);
+
+	tp_vars->prerandom_offset = 0;
+	spin_lock_init(&tp_vars->prerandom_lock);
 
 	kref_get(&tp_vars->refcount);
 	hlist_add_head_rcu(&tp_vars->list, &bat_priv->tp_list);
@@ -1341,4 +1390,12 @@ void batadv_tp_meter_recv(struct batadv_priv *bat_priv, struct sk_buff *skb)
 			   icmp->subtype);
 	}
 	consume_skb(skb);
+}
+
+/**
+ * batadv_tp_meter_init - initialize global tp_meter structures
+ */
+void batadv_tp_meter_init(void)
+{
+	get_random_bytes(batadv_tp_prerandom, sizeof(batadv_tp_prerandom));
 }

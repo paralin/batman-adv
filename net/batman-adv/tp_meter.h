@@ -24,6 +24,7 @@ struct sk_buff;
 
 #include <linux/types.h>
 
+void batadv_tp_meter_init(void);
 void batadv_tp_start(struct batadv_socket_client *socket_client, const u8 *dst,
 		     u32 test_length);
 void batadv_tp_stop(struct batadv_priv *bat_priv, const u8 *dst,

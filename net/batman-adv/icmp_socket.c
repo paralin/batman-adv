@@ -58,6 +58,7 @@ static void batadv_socket_add_packet(struct batadv_socket_client *socket_client,
 void batadv_socket_init(void)
 {
 	memset(batadv_socket_client_hash, 0, sizeof(batadv_socket_client_hash));
+	batadv_tp_meter_init();
 }
 
 static int batadv_socket_open(struct inode *inode, struct file *file)

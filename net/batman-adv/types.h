@@ -857,6 +857,8 @@ enum batadv_tp_meter_role {
  * @srtt: smoothed RTT scaled by 2^3
  * @rttvar: RTT variation scaled by 2^2
  * @more_bytes: waiting queue anchor when waiting for more ack/retry timeout
+ * @prerandom_offset: offset inside the prerandom buffer
+ * @prerandom_lock: spinlock protecting access to prerandom_offset
  * @last_recv: last in-order received packet
  * @unacked_list: list of unacked packets (meta-info only)
  * @unacked_lock: protect unacked_list
@@ -892,6 +894,8 @@ struct batadv_tp_vars {
 	u32 srtt;
 	u32 rttvar;
 	wait_queue_head_t more_bytes;
+	u32 prerandom_offset;
+	spinlock_t prerandom_lock; /* Protects prerandom_offset */
 
 	/* receiver variables */
 	u32 last_recv;
