@@ -1,0 +1,1144 @@
+static int batadv_iv_ogm_orig_add_if(struct batadv_orig_node *orig_node,
+{
+	bat_iv_ogm.c:153:		goto unlock;
+	bat_iv_ogm.c:161:		goto unlock;
+}
+
+batadv_iv_ogm_orig_get(struct batadv_priv *bat_priv, const u8 *addr)
+{
+	bat_iv_ogm.c:308:		goto free_orig_node;
+	bat_iv_ogm.c:313:		goto free_orig_node;
+	bat_iv_ogm.c:319:		goto free_orig_node;
+}
+
+batadv_iv_ogm_neigh_new(struct batadv_hard_iface *hard_iface,
+{
+	bat_iv_ogm.c:341:		goto out;
+}
+
+static void batadv_iv_ogm_emit(struct batadv_forw_packet *forw_packet)
+{
+	bat_iv_ogm.c:529:		goto out;
+	bat_iv_ogm.c:536:		goto out;
+	bat_iv_ogm.c:539:		goto out;
+	bat_iv_ogm.c:542:		goto out;
+	bat_iv_ogm.c:546:		goto out;
+}
+
+batadv_iv_ogm_can_aggregate(const struct batadv_ogm_packet *new_bat_ogm_packet,
+{
+	bat_iv_ogm.c:632:		goto out;
+	bat_iv_ogm.c:650:		goto out;
+}
+
+static void batadv_iv_ogm_aggregate_new(const unsigned char *packet_buff,
+{
+	bat_iv_ogm.c:686:		goto out_free_incoming;
+	bat_iv_ogm.c:693:			goto out_free_outgoing;
+	bat_iv_ogm.c:699:		goto out_nomem;
+	bat_iv_ogm.c:711:		goto out_free_forw_packet;
+}
+
+static void batadv_iv_ogm_schedule(struct batadv_hard_iface *hard_iface)
+{
+	bat_iv_ogm.c:978:		goto out;
+}
+
+batadv_iv_ogm_orig_update(struct batadv_priv *bat_priv,
+{
+	bat_iv_ogm.c:1073:			goto unlock;
+	bat_iv_ogm.c:1081:			goto unlock;
+	bat_iv_ogm.c:1090:		goto out;
+	bat_iv_ogm.c:1112:		goto out;
+	bat_iv_ogm.c:1117:			goto out;
+	bat_iv_ogm.c:1123:			goto out;
+	bat_iv_ogm.c:1144:			goto out;
+	bat_iv_ogm.c:1148:	goto out;
+}
+
+static int batadv_iv_ogm_calc_tq(struct batadv_orig_node *orig_node,
+{
+	bat_iv_ogm.c:1215:		goto out;
+}
+
+batadv_iv_ogm_update_seqnos(const struct ethhdr *ethhdr,
+{
+	bat_iv_ogm.c:1357:		goto out;
+}
+
+batadv_iv_ogm_process_per_outif(const struct sk_buff *skb, int ogm_offset,
+{
+	bat_iv_ogm.c:1461:		goto out;
+	bat_iv_ogm.c:1467:		goto out;
+	bat_iv_ogm.c:1497:		goto out;
+	bat_iv_ogm.c:1513:		goto out;
+	bat_iv_ogm.c:1528:		goto out_neigh;
+	bat_iv_ogm.c:1540:		goto out_neigh;
+	bat_iv_ogm.c:1556:		goto out_neigh;
+	bat_iv_ogm.c:1567:			goto out_neigh;
+	bat_iv_ogm.c:1577:		goto out_neigh;
+	bat_iv_ogm.c:1584:		goto out_neigh;
+	bat_iv_ogm.c:1590:		goto out_neigh;
+}
+
+static void batadv_iv_ogm_orig_print(struct batadv_priv *bat_priv,
+{
+	bat_iv_ogm.c:1884:				goto next;
+	bat_iv_ogm.c:1887:				goto next;
+}
+
+static int batadv_iv_ogm_neigh_cmp(struct batadv_neigh_node *neigh1,
+{
+	bat_iv_ogm.c:1993:		goto out;
+}
+
+batadv_iv_ogm_neigh_is_sob(struct batadv_neigh_node *neigh1,
+{
+	bat_iv_ogm.c:2036:		goto out;
+}
+
+int __init batadv_iv_init(void)
+{
+	bat_iv_ogm.c:2077:		goto out;
+	bat_iv_ogm.c:2081:		goto handler_unregister;
+	bat_iv_ogm.c:2083:	goto out;
+}
+
+static void batadv_v_orig_print(struct batadv_priv *bat_priv,
+{
+	bat_v.c:211:				goto next;
+}
+
+int __init batadv_v_init(void)
+{
+	bat_v.c:332:		goto elp_unregister;
+	bat_v.c:336:		goto ogm_unregister;
+}
+
+static u32 batadv_v_elp_get_throughput(struct batadv_hardif_neigh_node *neigh)
+{
+	bat_v_elp.c:107:		goto default_throughput;
+}
+
+static void batadv_v_elp_periodic_work(struct work_struct *work)
+{
+	bat_v_elp.c:251:		goto out;
+	bat_v_elp.c:256:		goto out;
+	bat_v_elp.c:260:		goto restart_timer;
+	bat_v_elp.c:264:		goto restart_timer;
+}
+
+int batadv_v_elp_iface_enable(struct batadv_hard_iface *hard_iface)
+{
+	bat_v_elp.c:334:		goto out;
+}
+
+static void batadv_v_elp_neigh_update(struct batadv_priv *bat_priv,
+{
+	bat_v_elp.c:435:		goto orig_free;
+	bat_v_elp.c:439:		goto neigh_free;
+	bat_v_elp.c:448:		goto hardif_free;
+}
+
+int batadv_v_elp_packet_recv(struct sk_buff *skb,
+{
+	bat_v_elp.c:505:		goto out;
+}
+
+static void batadv_v_ogm_send(struct work_struct *work)
+{
+	bat_v_ogm.c:145:		goto out;
+	bat_v_ogm.c:162:		goto reschedule;
+}
+
+static void batadv_v_ogm_forward(struct batadv_priv *bat_priv,
+{
+	bat_v_ogm.c:313:		goto out;
+	bat_v_ogm.c:317:		goto out;
+	bat_v_ogm.c:324:		goto out;
+	bat_v_ogm.c:328:		goto out;
+	bat_v_ogm.c:334:		goto out;
+	bat_v_ogm.c:339:		goto out;
+	bat_v_ogm.c:347:		goto out;
+}
+
+static int batadv_v_ogm_metric_update(struct batadv_priv *bat_priv,
+{
+	bat_v_ogm.c:404:		goto out;
+	bat_v_ogm.c:419:		goto out;
+	bat_v_ogm.c:426:		goto out;
+	bat_v_ogm.c:437:		goto out;
+}
+
+static bool batadv_v_ogm_route_update(struct batadv_priv *bat_priv,
+{
+	bat_v_ogm.c:491:		goto out;
+	bat_v_ogm.c:503:		goto out;
+	bat_v_ogm.c:518:		goto out;
+	bat_v_ogm.c:530:			goto out;
+	bat_v_ogm.c:540:			goto out;
+}
+
+static void batadv_v_ogm_process(const struct sk_buff *skb, int ogm_offset,
+{
+	bat_v_ogm.c:672:		goto out;
+	bat_v_ogm.c:682:		goto out;
+}
+
+static void batadv_bla_send_claim(struct batadv_priv *bat_priv, u8 *mac,
+{
+	bridge_loop_avoidance.c:364:		goto out;
+}
+
+static void batadv_bla_add_claim(struct batadv_priv *bat_priv,
+{
+	bridge_loop_avoidance.c:675:			goto claim_free_ref;
+}
+
+static void batadv_bla_purge_backbone_gw(struct batadv_priv *bat_priv, int now)
+{
+	bridge_loop_avoidance.c:1139:				goto purge_now;
+}
+
+static void batadv_bla_purge_claims(struct batadv_priv *bat_priv,
+{
+	bridge_loop_avoidance.c:1190:				goto purge_now;
+}
+
+static void batadv_bla_periodic_work(struct work_struct *work)
+{
+	bridge_loop_avoidance.c:1311:		goto out;
+	bridge_loop_avoidance.c:1317:		goto out;
+	bridge_loop_avoidance.c:1321:		goto out;
+}
+
+int batadv_bla_check_bcast_duplist(struct batadv_priv *bat_priv,
+{
+	bridge_loop_avoidance.c:1484:		goto out;
+}
+
+int batadv_bla_rx(struct batadv_priv *bat_priv, struct sk_buff *skb,
+{
+	bridge_loop_avoidance.c:1632:		goto handled;
+	bridge_loop_avoidance.c:1635:		goto allow;
+	bridge_loop_avoidance.c:1640:			goto handled;
+	bridge_loop_avoidance.c:1653:		goto allow;
+	bridge_loop_avoidance.c:1661:		goto allow;
+	bridge_loop_avoidance.c:1672:		goto handled;
+	bridge_loop_avoidance.c:1681:		goto allow;
+	bridge_loop_avoidance.c:1686:	goto out;
+}
+
+int batadv_bla_tx(struct batadv_priv *bat_priv, struct sk_buff *skb,
+{
+	bridge_loop_avoidance.c:1727:		goto out;
+	bridge_loop_avoidance.c:1730:		goto allow;
+	bridge_loop_avoidance.c:1733:		goto handled;
+	bridge_loop_avoidance.c:1740:			goto handled;
+	bridge_loop_avoidance.c:1749:		goto allow;
+	bridge_loop_avoidance.c:1760:		goto allow;
+	bridge_loop_avoidance.c:1768:		goto handled;
+	bridge_loop_avoidance.c:1773:		goto allow;
+	bridge_loop_avoidance.c:1778:	goto out;
+}
+
+int batadv_bla_claim_table_seq_print_text
+{
+	bridge_loop_avoidance.c:1811:		goto out;
+}
+
+int batadv_bla_backbone_table_seq_print_text(struct seq_file *seq, void *offset)
+{
+	bridge_loop_avoidance.c:1869:		goto out;
+}
+
+static int batadv_debug_log_setup(struct batadv_priv *bat_priv)
+{
+	debugfs.c:223:		goto err;
+	debugfs.c:227:		goto err;
+	debugfs.c:236:		goto err;
+}
+
+void batadv_debugfs_init(void)
+{
+	debugfs.c:460:		goto err;
+	debugfs.c:470:			goto err;
+}
+
+int batadv_debugfs_add_hardif(struct batadv_hard_iface *hard_iface)
+{
+	debugfs.c:499:		goto out;
+	debugfs.c:504:		goto out;
+	debugfs.c:513:			goto rem_attr;
+}
+
+int batadv_debugfs_add_meshif(struct net_device *dev)
+{
+	debugfs.c:544:		goto out;
+	debugfs.c:548:		goto out;
+	debugfs.c:551:		goto rem_attr;
+	debugfs.c:554:		goto rem_attr;
+	debugfs.c:564:			goto rem_attr;
+	debugfs.c:569:		goto rem_attr;
+}
+
+static void batadv_dat_entry_add(struct batadv_priv *bat_priv, __be32 ip,
+{
+	distributed-arp-table.c:332:		goto out;
+	distributed-arp-table.c:337:		goto out;
+	distributed-arp-table.c:353:		goto out;
+}
+
+static bool batadv_is_orig_node_eligible(struct batadv_dat_candidate *res,
+{
+	distributed-arp-table.c:473:		goto out;
+	distributed-arp-table.c:481:		goto out;
+	distributed-arp-table.c:484:		goto out;
+	distributed-arp-table.c:489:		goto out;
+	distributed-arp-table.c:495:		goto out;
+}
+
+static bool batadv_dat_send_data(struct batadv_priv *bat_priv,
+{
+	distributed-arp-table.c:636:		goto out;
+	distributed-arp-table.c:647:			goto free_orig;
+	distributed-arp-table.c:654:			goto free_neigh;
+}
+
+int batadv_dat_cache_seq_print_text(struct seq_file *seq, void *offset)
+{
+	distributed-arp-table.c:814:		goto out;
+}
+
+static u16 batadv_arp_get_type(struct batadv_priv *bat_priv,
+{
+	distributed-arp-table.c:864:		goto out;
+	distributed-arp-table.c:869:		goto out;
+	distributed-arp-table.c:874:		goto out;
+	distributed-arp-table.c:880:		goto out;
+	distributed-arp-table.c:883:		goto out;
+	distributed-arp-table.c:886:		goto out;
+	distributed-arp-table.c:889:		goto out;
+	distributed-arp-table.c:900:		goto out;
+	distributed-arp-table.c:904:		goto out;
+	distributed-arp-table.c:911:			goto out;
+}
+
+bool batadv_dat_snoop_outgoing_arp_request(struct batadv_priv *bat_priv,
+{
+	distributed-arp-table.c:968:		goto out;
+	distributed-arp-table.c:977:		goto out;
+	distributed-arp-table.c:1000:			goto out;
+	distributed-arp-table.c:1007:			goto out;
+}
+
+bool batadv_dat_snoop_incoming_arp_request(struct batadv_priv *bat_priv,
+{
+	distributed-arp-table.c:1056:		goto out;
+	distributed-arp-table.c:1062:		goto out;
+	distributed-arp-table.c:1075:		goto out;
+	distributed-arp-table.c:1082:		goto out;
+}
+
+bool batadv_dat_snoop_incoming_arp_request(struct batadv_priv *bat_priv,
+{
+	distributed-arp-table.c:1177:		goto out;
+	distributed-arp-table.c:1183:		goto out;
+}
+
+bool batadv_dat_drop_broadcast_packet(struct batadv_priv *bat_priv,
+{
+	distributed-arp-table.c:1234:		goto out;
+	distributed-arp-table.c:1240:		goto out;
+	distributed-arp-table.c:1246:		goto out;
+	distributed-arp-table.c:1254:		goto out;
+}
+
+static bool batadv_frag_insert_packet(struct batadv_orig_node *orig_node,
+{
+	fragmentation.c:160:		goto err;
+	fragmentation.c:168:		goto err;
+	fragmentation.c:185:		goto out;
+	fragmentation.c:192:			goto err_unlock;
+	fragmentation.c:201:			goto out;
+}
+
+batadv_frag_merge_packets(struct hlist_head *chain)
+{
+	fragmentation.c:274:		goto free;
+}
+
+bool batadv_frag_skb_buffer(struct sk_buff **skb,
+{
+	fragmentation.c:322:		goto out_err;
+	fragmentation.c:326:		goto out;
+	fragmentation.c:330:		goto out_err;
+}
+
+bool batadv_frag_skb_fwd(struct sk_buff *skb,
+{
+	fragmentation.c:365:		goto out;
+	fragmentation.c:369:		goto out;
+}
+
+static struct sk_buff *batadv_frag_create(struct sk_buff *skb,
+{
+	fragmentation.c:415:		goto err;
+}
+
+bool batadv_frag_send_packet(struct sk_buff *skb,
+{
+	fragmentation.c:461:		goto out_err;
+	fragmentation.c:466:		goto out_err;
+	fragmentation.c:483:			goto out_err;
+	fragmentation.c:493:			goto out_err;
+	fragmentation.c:499:		goto out_err;
+}
+
+batadv_gw_get_selected_gw_node(struct batadv_priv *bat_priv)
+{
+	gateway_client.c:95:		goto out;
+}
+
+batadv_gw_get_selected_orig(struct batadv_priv *bat_priv)
+{
+	gateway_client.c:113:		goto out;
+	gateway_client.c:118:		goto unlock;
+}
+
+batadv_gw_get_best_gw_node(struct batadv_priv *bat_priv)
+{
+	gateway_client.c:188:			goto next;
+	gateway_client.c:191:			goto next;
+}
+
+void batadv_gw_election(struct batadv_priv *bat_priv)
+{
+	gateway_client.c:287:		goto out;
+	gateway_client.c:292:		goto out;
+	gateway_client.c:297:		goto out;
+	gateway_client.c:306:			goto out;
+	gateway_client.c:313:			goto out;
+}
+
+void batadv_gw_check_election(struct batadv_priv *bat_priv,
+{
+	gateway_client.c:371:		goto reselect;
+	gateway_client.c:375:		goto reselect;
+	gateway_client.c:380:		goto reselect;
+	gateway_client.c:384:		goto out;
+	gateway_client.c:388:		goto out;
+	gateway_client.c:393:		goto out;
+	gateway_client.c:400:		goto out;
+	gateway_client.c:407:		goto out;
+}
+
+void batadv_gw_node_update(struct batadv_priv *bat_priv,
+{
+	gateway_client.c:516:		goto out;
+	gateway_client.c:521:		goto out;
+}
+
+static int batadv_write_buffer_text(struct batadv_priv *bat_priv,
+{
+	gateway_client.c:603:		goto out;
+	gateway_client.c:607:		goto out;
+}
+
+int batadv_gw_client_seq_print_text(struct seq_file *seq, void *offset)
+{
+	gateway_client.c:642:		goto out;
+}
+
+bool batadv_gw_out_of_range(struct batadv_priv *bat_priv,
+{
+	gateway_client.c:822:		goto out;
+	gateway_client.c:826:		goto out;
+	gateway_client.c:838:			goto out;
+	gateway_client.c:842:			goto out;
+	gateway_client.c:851:			goto out;
+	gateway_client.c:856:			goto out;
+	gateway_client.c:864:		goto out;
+	gateway_client.c:869:		goto out;
+	gateway_client.c:873:		goto out;
+}
+
+batadv_hardif_get_by_netdev(const struct net_device *net_dev)
+{
+	hard-interface.c:76:			goto out;
+}
+
+batadv_hardif_get_active(const struct net_device *soft_iface)
+{
+	hard-interface.c:206:			goto out;
+}
+
+static void batadv_primary_if_update_addr(struct batadv_priv *bat_priv,
+{
+	hard-interface.c:223:		goto out;
+}
+
+static void batadv_primary_if_select(struct batadv_priv *bat_priv,
+{
+	hard-interface.c:246:		goto out;
+}
+
+int batadv_hardif_min_mtu(struct net_device *soft_iface)
+{
+	hard-interface.c:347:		goto out;
+}
+
+batadv_hardif_activate_interface(struct batadv_hard_iface *hard_iface)
+{
+	hard-interface.c:391:		goto out;
+}
+
+int batadv_hardif_enable_interface(struct batadv_hard_iface *hard_iface,
+{
+	hard-interface.c:465:		goto out;
+	hard-interface.c:468:		goto out;
+	hard-interface.c:477:			goto err;
+	hard-interface.c:488:		goto err_dev;
+	hard-interface.c:497:		goto err_dev;
+	hard-interface.c:505:		goto err_dev;
+	hard-interface.c:509:		goto err_upper;
+	hard-interface.c:519:		goto err_upper;
+}
+
+void batadv_hardif_disable_interface(struct batadv_hard_iface *hard_iface,
+{
+	hard-interface.c:579:		goto out;
+}
+
+batadv_hardif_add_interface(struct net_device *net_dev)
+{
+	hard-interface.c:655:		goto out;
+	hard-interface.c:661:		goto release_dev;
+	hard-interface.c:665:		goto free_if;
+	hard-interface.c:674:		goto free_sysfs;
+}
+
+static int batadv_hard_if_event(struct notifier_block *this,
+{
+	hard-interface.c:756:		goto out;
+	hard-interface.c:778:			goto hardif_put;
+	hard-interface.c:787:			goto hardif_put;
+}
+
+batadv_primary_if_get_selected(struct batadv_priv *bat_priv)
+{
+	hard-interface.h:84:		goto out;
+}
+
+struct batadv_hashtable *batadv_hash_new(u32 size)
+{
+	hash.c:55:		goto free_hash;
+	hash.c:60:		goto free_table;
+}
+
+static inline int batadv_hash_add(struct batadv_hashtable *hash,
+{
+	hash.h:118:		goto out;
+	hash.h:131:		goto unlock;
+}
+
+static ssize_t batadv_socket_write(struct file *file, const char __user *buff,
+{
+	icmp_socket.c:198:		goto out;
+	icmp_socket.c:209:		goto out;
+	icmp_socket.c:218:		goto free_skb;
+	icmp_socket.c:225:		goto free_skb;
+	icmp_socket.c:234:			goto free_skb;
+	icmp_socket.c:238:			goto dst_unreach;
+	icmp_socket.c:242:			goto dst_unreach;
+	icmp_socket.c:247:			goto dst_unreach;
+	icmp_socket.c:250:			goto dst_unreach;
+	icmp_socket.c:253:			goto dst_unreach;
+	icmp_socket.c:266:		goto free_skb;
+	icmp_socket.c:276:		goto free_skb;
+	icmp_socket.c:282:	goto out;
+}
+
+int batadv_socket_setup(struct batadv_priv *bat_priv)
+{
+	icmp_socket.c:326:		goto err;
+	icmp_socket.c:331:		goto err;
+}
+
+int batadv_mesh_init(struct net_device *soft_iface)
+{
+	main.c:165:		goto err;
+	main.c:169:		goto err;
+	main.c:173:		goto err;
+	main.c:177:		goto err;
+	main.c:181:		goto err;
+}
+
+	main.c:185:		goto err;
+batadv_seq_print_text_primary_if_get(struct seq_file *seq)
+{
+	main.c:288:		goto out;
+	main.c:292:		goto out;
+}
+
+int batadv_batman_skb_recv(struct sk_buff *skb, struct net_device *dev,
+{
+	main.c:408:		goto err_out;
+	main.c:412:		goto err_free;
+	main.c:416:		goto err_free;
+	main.c:419:		goto err_free;
+	main.c:424:		goto err_free;
+	main.c:428:		goto err_free;
+	main.c:436:		goto err_free;
+}
+
+u16 batadv_tvlv_container_ogm_append(struct batadv_priv *bat_priv,
+{
+	main.c:920:		goto end;
+	main.c:923:		goto end;
+}
+
+void batadv_tvlv_unicast_send(struct batadv_priv *bat_priv, u8 *src,
+{
+	main.c:1195:		goto out;
+}
+
+void batadv_mcast_mla_update(struct batadv_priv *bat_priv)
+{
+	multicast.c:271:		goto update;
+	multicast.c:275:		goto out;
+}
+
+int batadv_nc_mesh_init(struct batadv_priv *bat_priv)
+{
+	network-coding.c:161:		goto err;
+	network-coding.c:168:		goto err;
+}
+
+static bool batadv_nc_sniffed_purge(struct batadv_priv *bat_priv,
+{
+	network-coding.c:610:		goto out;
+}
+
+static struct batadv_nc_node
+{
+	network-coding.c:860:		goto free;
+}
+
+void batadv_nc_update_nc_node(struct batadv_priv *bat_priv,
+{
+	network-coding.c:914:		goto out;
+	network-coding.c:918:		goto out;
+	network-coding.c:923:		goto out;
+	network-coding.c:929:		goto out;
+	network-coding.c:937:		goto out;
+}
+
+static bool batadv_nc_code_packets(struct batadv_priv *bat_priv,
+{
+	network-coding.c:1087:		goto out;
+	network-coding.c:1092:		goto out;
+	network-coding.c:1098:		goto out;
+	network-coding.c:1103:		goto out;
+	network-coding.c:1152:		goto out;
+}
+
+bool batadv_nc_skb_forward(struct sk_buff *skb,
+{
+	network-coding.c:1526:		goto out;
+	network-coding.c:1532:		goto out;
+	network-coding.c:1545:		goto out;
+	network-coding.c:1550:		goto free_nc_path;
+}
+
+void batadv_nc_skb_store_for_decoding(struct batadv_priv *bat_priv,
+{
+	network-coding.c:1579:		goto out;
+	network-coding.c:1585:		goto out;
+	network-coding.c:1594:		goto out;
+	network-coding.c:1599:		goto free_nc_path;
+	network-coding.c:1602:		goto free_skb;
+	network-coding.c:1605:		goto free_skb;
+	network-coding.c:1610:		goto free_skb;
+}
+
+static int batadv_nc_recv_coded_packet(struct sk_buff *skb,
+{
+	network-coding.c:1850:		goto free_nc_packet;
+	network-coding.c:1853:		goto free_nc_packet;
+	network-coding.c:1859:		goto free_nc_packet;
+}
+
+int batadv_nc_nodes_seq_print_text(struct seq_file *seq, void *offset)
+{
+	network-coding.c:1910:		goto out;
+}
+
+int batadv_nc_init_debugfs(struct batadv_priv *bat_priv)
+{
+	network-coding.c:1967:		goto out;
+	network-coding.c:1972:		goto out;
+	network-coding.c:1977:		goto out;
+	network-coding.c:1982:		goto out;
+}
+
+batadv_orig_node_vlan_new(struct batadv_orig_node *orig_node,
+{
+	originator.c:121:		goto out;
+	originator.c:125:		goto out;
+}
+
+int batadv_originator_init(struct batadv_priv *bat_priv)
+{
+	originator.c:171:		goto err;
+}
+
+batadv_orig_ifinfo_new(struct batadv_orig_node *orig_node,
+{
+	originator.c:378:		goto out;
+	originator.c:382:		goto out;
+	originator.c:388:		goto out;
+}
+
+batadv_neigh_ifinfo_new(struct batadv_neigh_node *neigh,
+{
+	originator.c:459:		goto out;
+	originator.c:463:		goto out;
+	originator.c:468:		goto out;
+}
+
+batadv_hardif_neigh_create(struct batadv_hard_iface *hard_iface,
+{
+	originator.c:540:		goto out;
+	originator.c:543:		goto out;
+	originator.c:548:		goto out;
+}
+
+batadv_neigh_node_new(struct batadv_orig_node *orig_node,
+{
+	originator.c:642:		goto out;
+	originator.c:647:		goto out;
+	originator.c:651:		goto out;
+	originator.c:656:		goto out;
+}
+
+struct batadv_orig_node *batadv_orig_node_new(struct batadv_priv *bat_priv,
+{
+	originator.c:915:		goto free_orig_node;
+}
+
+int batadv_orig_hardif_seq_print_text(struct seq_file *seq, void *offset)
+{
+	originator.c:1285:		goto out;
+	originator.c:1292:		goto out;
+	originator.c:1297:		goto out;
+}
+
+int batadv_orig_hash_add_if(struct batadv_hard_iface *hard_iface,
+{
+	originator.c:1337:				goto err;
+}
+
+int batadv_orig_hash_del_if(struct batadv_hard_iface *hard_iface,
+{
+	originator.c:1375:				goto err;
+}
+
+void batadv_update_route(struct batadv_priv *bat_priv,
+{
+	routing.c:132:		goto out;
+}
+
+static int batadv_recv_my_icmp_packet(struct batadv_priv *bat_priv,
+{
+	routing.c:243:			goto out;
+	routing.c:248:			goto out;
+	routing.c:252:			goto out;
+	routing.c:268:		goto out;
+}
+
+static int batadv_recv_icmp_ttl_exceeded(struct batadv_priv *bat_priv,
+{
+	routing.c:292:		goto out;
+	routing.c:297:		goto out;
+	routing.c:302:		goto out;
+	routing.c:306:		goto out;
+}
+
+int batadv_recv_icmp_packet(struct sk_buff *skb,
+{
+	routing.c:339:		goto out;
+	routing.c:345:		goto out;
+	routing.c:349:		goto out;
+	routing.c:353:		goto out;
+	routing.c:362:			goto out;
+	routing.c:366:			goto out;
+	routing.c:371:			goto out;
+	routing.c:389:		goto out;
+	routing.c:393:		goto out;
+}
+
+batadv_find_router(struct batadv_priv *bat_priv,
+{
+	routing.c:506:			goto next;
+	routing.c:510:			goto next;
+	routing.c:519:			goto next;
+	routing.c:523:			goto next;
+}
+
+static int batadv_route_unicast_packet(struct sk_buff *skb,
+{
+	routing.c:602:		goto out;
+	routing.c:609:		goto out;
+	routing.c:613:		goto out;
+}
+
+batadv_reroute_unicast_packet(struct batadv_priv *bat_priv,
+{
+	routing.c:682:			goto out;
+	routing.c:689:			goto out;
+	routing.c:692:			goto out;
+}
+
+int batadv_recv_unicast_packet(struct sk_buff *skb,
+{
+	routing.c:901:			goto rx_success;
+	routing.c:904:			goto rx_success;
+}
+
+int batadv_recv_frag_packet(struct sk_buff *skb,
+{
+	routing.c:990:		goto out;
+	routing.c:995:		goto out;
+	routing.c:1001:		goto out;
+	routing.c:1009:		goto out;
+}
+
+int batadv_recv_bcast_packet(struct sk_buff *skb,
+{
+	routing.c:1041:		goto out;
+	routing.c:1047:		goto out;
+	routing.c:1051:		goto out;
+	routing.c:1055:		goto out;
+	routing.c:1061:		goto out;
+	routing.c:1064:		goto out;
+	routing.c:1069:		goto out;
+	routing.c:1077:		goto spin_unlock;
+	routing.c:1085:		goto spin_unlock;
+	routing.c:1097:		goto out;
+	routing.c:1108:		goto out;
+	routing.c:1111:		goto rx_success;
+	routing.c:1113:		goto rx_success;
+	routing.c:1121:	goto out;
+}
+
+static void batadv_send_outstanding_bcast_packet(struct work_struct *work);
+{
+	send.c:77:		goto send_skb_err;
+	send.c:80:		goto send_skb_err;
+	send.c:85:		goto send_skb_err;
+	send.c:90:		goto send_skb_err;
+}
+
+int batadv_send_skb_to_orig(struct sk_buff *skb,
+{
+	send.c:171:		goto out;
+	send.c:182:		goto out;
+}
+
+bool batadv_send_skb_prepare_unicast_4addr(struct batadv_priv *bat_priv,
+{
+	send.c:272:		goto out;
+	send.c:280:		goto out;
+}
+
+int batadv_send_skb_unicast(struct batadv_priv *bat_priv,
+{
+	send.c:323:		goto out;
+	send.c:328:			goto out;
+	send.c:334:			goto out;
+	send.c:340:		goto out;
+}
+
+int batadv_add_bcast_packet_to_list(struct batadv_priv *bat_priv,
+{
+	send.c:501:		goto out;
+	send.c:506:		goto out_and_inc;
+	send.c:511:		goto out_and_inc;
+	send.c:515:		goto packet_free;
+}
+
+static void batadv_send_outstanding_bcast_packet(struct work_struct *work)
+{
+	send.c:566:		goto out;
+	send.c:569:		goto out;
+}
+
+void batadv_send_outstanding_bat_ogm_packet(struct work_struct *work)
+{
+	send.c:616:		goto out;
+}
+
+static int batadv_interface_tx(struct sk_buff *skb,
+{
+	soft-interface.c:209:		goto dropped;
+	soft-interface.c:226:		goto dropped;
+	soft-interface.c:232:		goto dropped;
+	soft-interface.c:243:			goto dropped;
+	soft-interface.c:253:		goto dropped;
+	soft-interface.c:256:		goto dropped;
+	soft-interface.c:263:			goto send;
+	soft-interface.c:277:			goto send;
+	soft-interface.c:287:			goto dropped;
+	soft-interface.c:294:				goto dropped;
+	soft-interface.c:307:			goto dropped;
+	soft-interface.c:317:			goto dropped;
+	soft-interface.c:350:				goto dropped;
+	soft-interface.c:359:				goto dropped;
+	soft-interface.c:367:			goto dropped_freed;
+	soft-interface.c:372:	goto end;
+}
+
+void batadv_interface_rx(struct net_device *soft_iface,
+{
+	soft-interface.c:401:		goto dropped;
+	soft-interface.c:423:		goto dropped;
+	soft-interface.c:428:		goto dropped;
+	soft-interface.c:448:		goto out;
+	soft-interface.c:469:		goto dropped;
+	soft-interface.c:473:	goto out;
+}
+
+static int batadv_softif_init_late(struct net_device *dev)
+{
+	soft-interface.c:839:		goto free_bat_counters;
+	soft-interface.c:843:		goto free_bat_counters;
+	soft-interface.c:847:		goto unreg_debugfs;
+}
+
+static int batadv_softif_slave_add(struct net_device *dev,
+{
+	soft-interface.c:875:		goto out;
+}
+
+static int batadv_softif_slave_del(struct net_device *dev,
+{
+	soft-interface.c:901:		goto out;
+}
+
+int batadv_sysfs_add_meshif(struct net_device *dev)
+{
+	sysfs.c:692:		goto out;
+	sysfs.c:702:			goto rem_attr;
+}
+
+int batadv_sysfs_add_vlan(struct net_device *dev,
+{
+	sysfs.c:754:			goto out;
+	sysfs.c:771:			goto rem_attr;
+}
+
+static ssize_t batadv_store_mesh_iface(struct kobject *kobj,
+{
+	sysfs.c:857:		goto out;
+	sysfs.c:861:		goto out;
+	sysfs.c:868:		goto unlock;
+}
+
+static ssize_t batadv_store_throughput_override(struct kobject *kobj,
+{
+	sysfs.c:956:		goto out;
+}
+
+int batadv_sysfs_add_hardif(struct kobject **hardif_obj, struct net_device *dev)
+{
+	sysfs.c:1023:		goto out;
+	sysfs.c:1032:			goto rem_attr;
+}
+
+int batadv_throw_uevent(struct batadv_priv *bat_priv, enum batadv_uev_type type,
+{
+	sysfs.c:1064:		goto fail_send;
+	sysfs.c:1070:		goto env0_free;
+	sysfs.c:1077:			goto env1_free;
+}
+
+static void batadv_tt_local_event(struct batadv_priv *bat_priv,
+{
+	translation-table.c:454:			goto del;
+	translation-table.c:456:			goto del;
+	translation-table.c:470:		goto unlock;
+}
+
+bool batadv_tt_local_add(struct net_device *soft_iface, const u8 *addr,
+{
+	translation-table.c:616:			goto add_event;
+	translation-table.c:631:		goto check_roaming;
+	translation-table.c:642:		goto out;
+	translation-table.c:647:		goto out;
+	translation-table.c:655:		goto out;
+	translation-table.c:692:		goto out;
+}
+
+batadv_tt_prepare_tvlv_global_data(struct batadv_orig_node *orig_node,
+{
+	translation-table.c:813:		goto out;
+}
+
+batadv_tt_prepare_tvlv_local_data(struct batadv_priv *bat_priv,
+{
+	translation-table.c:887:		goto out;
+}
+
+static void batadv_tt_tvlv_container_update(struct batadv_priv *bat_priv)
+{
+	translation-table.c:942:		goto container_register;
+}
+
+int batadv_tt_local_seq_print_text(struct seq_file *seq, void *offset)
+{
+	translation-table.c:1006:		goto out;
+}
+
+u16 batadv_tt_local_remove(struct batadv_priv *bat_priv, const u8 *addr,
+{
+	translation-table.c:1107:		goto out;
+	translation-table.c:1125:		goto out;
+	translation-table.c:1137:		goto out;
+	translation-table.c:1145:		goto out;
+}
+
+batadv_tt_global_orig_entry_add(struct batadv_tt_global_entry *tt_global,
+{
+	translation-table.c:1366:		goto out;
+	translation-table.c:1371:		goto out;
+}
+
+static bool batadv_tt_global_add(struct batadv_priv *bat_priv,
+{
+	translation-table.c:1436:		goto out;
+	translation-table.c:1441:			goto out;
+	translation-table.c:1471:			goto out_remove;
+	translation-table.c:1487:				goto out;
+	translation-table.c:1490:				goto out_remove;
+	translation-table.c:1492:			goto add_orig_entry;
+	translation-table.c:1540:		goto out;
+}
+
+batadv_tt_global_print_entry(struct batadv_priv *bat_priv,
+{
+	translation-table.c:1640:			goto print_list;
+}
+
+int batadv_tt_global_seq_print_text(struct seq_file *seq, void *offset)
+{
+	translation-table.c:1704:		goto out;
+}
+
+static void batadv_tt_global_del(struct batadv_priv *bat_priv,
+{
+	translation-table.c:1872:		goto out;
+	translation-table.c:1882:		goto out;
+}
+
+struct batadv_orig_node *batadv_transtable_search(struct batadv_priv *bat_priv,
+{
+	translation-table.c:2119:			goto out;
+	translation-table.c:2124:		goto out;
+	translation-table.c:2131:		goto out;
+}
+
+batadv_tt_req_node_new(struct batadv_priv *bat_priv,
+{
+	translation-table.c:2370:			goto unlock;
+	translation-table.c:2375:		goto unlock;
+}
+
+static int batadv_send_tt_request(struct batadv_priv *bat_priv,
+{
+	translation-table.c:2597:		goto out;
+	translation-table.c:2604:		goto out;
+	translation-table.c:2609:		goto out;
+}
+
+static bool batadv_send_other_tt_response(struct batadv_priv *bat_priv,
+{
+	translation-table.c:2685:		goto out;
+	translation-table.c:2689:		goto out;
+	translation-table.c:2699:		goto out;
+	translation-table.c:2720:			goto unlock;
+	translation-table.c:2736:			goto out;
+	translation-table.c:2751:		goto out;
+	translation-table.c:2772:	goto out;
+}
+
+static bool batadv_send_my_tt_response(struct batadv_priv *bat_priv,
+{
+	translation-table.c:2820:		goto out;
+	translation-table.c:2824:		goto out;
+	translation-table.c:2847:			goto unlock;
+	translation-table.c:2865:			goto out;
+	translation-table.c:2889:	goto out;
+}
+
+static void batadv_tt_fill_gtable(struct batadv_priv *bat_priv,
+{
+	translation-table.c:2965:		goto out;
+}
+
+bool batadv_is_my_client(struct batadv_priv *bat_priv, const u8 *addr,
+{
+	translation-table.c:3016:		goto out;
+	translation-table.c:3022:		goto out;
+}
+
+static void batadv_handle_tt_response(struct batadv_priv *bat_priv,
+{
+	translation-table.c:3055:		goto out;
+}
+
+static bool batadv_tt_check_roam_count(struct batadv_priv *bat_priv, u8 *client)
+{
+	translation-table.c:3153:			goto unlock;
+	translation-table.c:3161:			goto unlock;
+}
+
+static void batadv_send_roam_adv(struct batadv_priv *bat_priv, u8 *client,
+{
+	translation-table.c:3198:		goto out;
+	translation-table.c:3204:		goto out;
+}
+
+bool batadv_is_ap_isolated(struct batadv_priv *bat_priv, u8 *src, u8 *dst,
+{
+	translation-table.c:3416:		goto vlan_free;
+	translation-table.c:3420:		goto vlan_free;
+	translation-table.c:3424:		goto local_entry_free;
+}
+
+static void batadv_tt_update_orig(struct batadv_priv *bat_priv,
+{
+	translation-table.c:3474:			goto request_table;
+	translation-table.c:3501:			goto request_table;
+}
+
+bool batadv_tt_global_client_is_roaming(struct batadv_priv *bat_priv,
+{
+	translation-table.c:3540:		goto out;
+}
+
+bool batadv_tt_local_client_is_roaming(struct batadv_priv *bat_priv,
+{
+	translation-table.c:3566:		goto out;
+}
+
+bool batadv_tt_add_temporary_global_entry(struct batadv_priv *bat_priv,
+{
+	translation-table.c:3584:		goto out;
+}
+
+static int batadv_roam_tvlv_unicast_handler_v1(struct batadv_priv *bat_priv,
+{
+	translation-table.c:3783:		goto out;
+	translation-table.c:3787:		goto out;
+}
