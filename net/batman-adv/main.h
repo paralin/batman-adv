@@ -203,7 +203,8 @@ int batadv_mesh_init(struct net_device *soft_iface);
 void batadv_mesh_free(struct net_device *soft_iface);
 bool batadv_is_my_mac(struct batadv_priv *bat_priv, const u8 *addr);
 struct batadv_hard_iface *
-batadv_seq_print_text_primary_if_get(struct seq_file *seq);
+batadv_seq_print_text_primary_if_get(struct seq_file *seq,
+				     struct net_device *net_dev);
 int batadv_max_header_len(void);
 void batadv_skb_set_priority(struct sk_buff *skb, int offset);
 int batadv_batman_skb_recv(struct sk_buff *skb, struct net_device *dev,

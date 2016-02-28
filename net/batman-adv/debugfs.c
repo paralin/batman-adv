@@ -269,11 +269,43 @@ static int neighbors_open(struct inode *inode, struct file *file)
 	return single_open(file, batadv_hardif_neigh_seq_print_text, net_dev);
 }
 
-static int batadv_originators_open(struct inode *inode, struct file *file)
+static const struct seq_operations batadv_orig_seq_ops = {
+	.start  = batadv_orig_seq_start,
+	.next   = batadv_orig_seq_next,
+	.stop   = batadv_orig_seq_stop,
+	.show   = batadv_orig_seq_show,
+};
+
+/**
+ * batadv_seq_open - TODO
+ * @inode: TODO
+ * @f: TODO
+ * @ops: TODO
+ * @size: TODO
+ *
+ * Return: TODO
+ */
+static int batadv_seq_open(struct inode *inode, struct file *f,
+			   const struct seq_operations *ops, int size)
 {
+	struct batadv_seq_private *p;
 	struct net_device *net_dev = (struct net_device *)inode->i_private;
 
-	return single_open(file, batadv_orig_seq_print_text, net_dev);
+	BUG_ON(size < sizeof(*p));
+
+	p = __seq_open_private(f, ops, size);
+	if (p == NULL)
+		return -ENOMEM;
+
+	p->net_dev = net_dev;
+
+	return 0;
+}
+
+static int batadv_originators_open(struct inode *inode, struct file *file)
+{
+	return batadv_seq_open(inode, file, &batadv_orig_seq_ops,
+			       sizeof(struct batadv_seq_hash_iter));
 }
 
 /**
@@ -375,6 +407,18 @@ struct batadv_debuginfo batadv_debuginfo_##_name = {	\
 		}					\
 }
 
+#define BATADV_DEBUGINFO_SEQ(_name, _mode, _open)	\
+struct batadv_debuginfo batadv_debuginfo_##_name = {	\
+	.attr = { .name = __stringify(_name),		\
+		  .mode = _mode, },			\
+	.fops = { .owner = THIS_MODULE,			\
+		  .open = _open,			\
+		  .read	= seq_read,			\
+		  .llseek = seq_lseek,			\
+		  .release = seq_release_private,	\
+		}					\
+}
+
 /* the following attributes are general and therefore they will be directly
  * placed in the BATADV_DEBUGFS_SUBDIR subdirectory of debugfs
  */
@@ -387,7 +431,7 @@ static struct batadv_debuginfo *batadv_general_debuginfos[] = {
 
 /* The following attributes are per soft interface */
 static BATADV_DEBUGINFO(neighbors, S_IRUGO, neighbors_open);
-static BATADV_DEBUGINFO(originators, S_IRUGO, batadv_originators_open);
+static BATADV_DEBUGINFO_SEQ(originators, S_IRUGO, batadv_originators_open);
 static BATADV_DEBUGINFO(gateways, S_IRUGO, batadv_gateways_open);
 static BATADV_DEBUGINFO(transtable_global, S_IRUGO,
 			batadv_transtable_global_open);

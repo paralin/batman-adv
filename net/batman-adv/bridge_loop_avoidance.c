@@ -1807,7 +1807,7 @@ int batadv_bla_claim_table_seq_print_text(struct seq_file *seq, void *offset)
 	bool is_own;
 	u8 *primary_addr;
 
-	primary_if = batadv_seq_print_text_primary_if_get(seq);
+	primary_if = batadv_seq_print_text_primary_if_get(seq, net_dev);
 	if (!primary_if)
 		goto out;
 
@@ -1865,7 +1865,7 @@ int batadv_bla_backbone_table_seq_print_text(struct seq_file *seq, void *offset)
 	bool is_own;
 	u8 *primary_addr;
 
-	primary_if = batadv_seq_print_text_primary_if_get(seq);
+	primary_if = batadv_seq_print_text_primary_if_get(seq, net_dev);
 	if (!primary_if)
 		goto out;
 

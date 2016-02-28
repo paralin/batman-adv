@@ -698,7 +698,7 @@ int batadv_hardif_neigh_seq_print_text(struct seq_file *seq, void *offset)
 	struct batadv_priv *bat_priv = netdev_priv(net_dev);
 	struct batadv_hard_iface *primary_if;
 
-	primary_if = batadv_seq_print_text_primary_if_get(seq);
+	primary_if = batadv_seq_print_text_primary_if_get(seq, net_dev);
 	if (!primary_if)
 		return 0;
 
@@ -1235,33 +1235,119 @@ void batadv_purge_orig_ref(struct batadv_priv *bat_priv)
 	_batadv_purge_orig(bat_priv);
 }
 
-int batadv_orig_seq_print_text(struct seq_file *seq, void *offset)
+static void batadv_orig_seq_show_header(struct seq_file *seq)
 {
-	struct net_device *net_dev = (struct net_device *)seq->private;
-	struct batadv_priv *bat_priv = netdev_priv(net_dev);
+	struct batadv_seq_hash_iter *iter = seq->private;
+	struct batadv_priv *bat_priv = netdev_priv(iter->p.net_dev);
 	struct batadv_hard_iface *primary_if;
 
-	primary_if = batadv_seq_print_text_primary_if_get(seq);
+	primary_if = batadv_seq_print_text_primary_if_get(seq, iter->p.net_dev);
 	if (!primary_if)
-		return 0;
+		return;
 
 	seq_printf(seq, "[B.A.T.M.A.N. adv %s, MainIF/MAC: %s/%pM (%s %s)]\n",
 		   BATADV_SOURCE_VERSION, primary_if->net_dev->name,
-		   primary_if->net_dev->dev_addr, net_dev->name,
+		   primary_if->net_dev->dev_addr, iter->p.net_dev->name,
 		   bat_priv->bat_algo_ops->name);
 
 	batadv_hardif_put(primary_if);
 
-	if (!bat_priv->bat_algo_ops->bat_orig_print) {
-		seq_puts(seq,
-			 "No printing function for this routing protocol\n");
+	if (bat_priv->bat_algo_ops->bat_orig_seq_header)
+		bat_priv->bat_algo_ops->bat_orig_seq_header(bat_priv, seq);
+}
+
+static void *batadv_orig_seq_get_idx(struct seq_file *seq, loff_t pos)
+{
+	struct batadv_seq_hash_iter *iter = seq->private;
+	struct batadv_priv *bat_priv = netdev_priv(iter->p.net_dev);
+	struct batadv_hashtable *hash = bat_priv->orig_hash;
+	struct hlist_head *head;
+	loff_t cur = 0;
+
+	iter->bucket = 0;
+	iter->entry = NULL;
+
+	for (; iter->bucket < hash->size; iter->bucket++) {
+		head = &hash->table[iter->bucket];
+		iter->entry = rcu_dereference_raw(hlist_first_rcu(head));
+
+		if (iter->entry) {
+			cur++;
+			if (cur == pos)
+				return iter->entry;
+		}
+	}
+
+	return NULL;
+}
+
+void *batadv_orig_seq_start(struct seq_file *seq, loff_t *pos)
+	__acquires(RCU)
+{
+	rcu_read_lock();
+
+	if (*pos == 0)
+		return SEQ_START_TOKEN;
+	return batadv_orig_seq_get_idx(seq, *pos);
+}
+
+void *batadv_orig_seq_next(struct seq_file *seq, void *v, loff_t *pos)
+{
+	struct batadv_seq_hash_iter *iter = seq->private;
+	struct batadv_priv *bat_priv = netdev_priv(iter->p.net_dev);
+	struct batadv_hashtable *hash = bat_priv->orig_hash;
+	struct hlist_head *head;
+
+	++*pos;
+	if (v == SEQ_START_TOKEN) {
+		iter->bucket = 0;
+		iter->entry = NULL;
+		/* TODO seq_puts(seq, "No batman nodes in range ...\n"); */
+	} else {
+		iter->entry = rcu_dereference_raw(hlist_next_rcu(iter->entry));
+		if (!iter->entry)
+			iter->bucket++;
+	}
+
+	if (iter->entry)
+		return iter->entry;
+
+	for (; iter->bucket < hash->size; iter->bucket++) {
+		head = &hash->table[iter->bucket];
+		iter->entry = rcu_dereference_raw(hlist_first_rcu(head));
+
+		if (iter->entry)
+			return iter->entry;
+	}
+
+	return NULL;
+}
+
+int batadv_orig_seq_show(struct seq_file *seq, void *v)
+{
+	struct batadv_seq_hash_iter *iter = seq->private;
+	struct batadv_priv *bat_priv = netdev_priv(iter->p.net_dev);
+	struct batadv_orig_node *orig_node;
+
+	if (v == SEQ_START_TOKEN) {
+		batadv_orig_seq_show_header(seq);
 		return 0;
 	}
 
-	bat_priv->bat_algo_ops->bat_orig_print(bat_priv, seq,
-					       BATADV_IF_DEFAULT);
+	orig_node = hlist_entry(iter->entry, struct batadv_orig_node, hash_entry);
+
+	if (bat_priv->bat_algo_ops->bat_orig_seq_show)
+		bat_priv->bat_algo_ops->bat_orig_seq_show(bat_priv, seq,
+							  orig_node,
+							  BATADV_IF_DEFAULT);
 
 	return 0;
+}
+
+void batadv_orig_seq_stop(struct seq_file *seq, void *v)
+	__releases(RCU)
+{
+	rcu_read_unlock();
 }
 
 /**
@@ -1276,7 +1362,7 @@ int batadv_orig_hardif_seq_print_text(struct seq_file *seq, void *offset)
 {
 	struct net_device *net_dev = (struct net_device *)seq->private;
 	struct batadv_hard_iface *hard_iface;
-	struct batadv_priv *bat_priv;
+	/* TODO struct batadv_priv *bat_priv; */
 
 	hard_iface = batadv_hardif_get_by_netdev(net_dev);
 
@@ -1285,6 +1371,8 @@ int batadv_orig_hardif_seq_print_text(struct seq_file *seq, void *offset)
 		goto out;
 	}
 
+	/*
+	TODO
 	bat_priv = netdev_priv(hard_iface->soft_iface);
 	if (!bat_priv->bat_algo_ops->bat_orig_print) {
 		seq_puts(seq,
@@ -1303,6 +1391,7 @@ int batadv_orig_hardif_seq_print_text(struct seq_file *seq, void *offset)
 		   hard_iface->soft_iface->name, bat_priv->bat_algo_ops->name);
 
 	bat_priv->bat_algo_ops->bat_orig_print(bat_priv, seq, hard_iface);
+	*/
 
 out:
 	if (hard_iface)

@@ -1001,7 +1001,7 @@ int batadv_tt_local_seq_print_text(struct seq_file *seq, void *offset)
 	bool no_purge;
 	u16 np_flag = BATADV_TT_CLIENT_NOPURGE;
 
-	primary_if = batadv_seq_print_text_primary_if_get(seq);
+	primary_if = batadv_seq_print_text_primary_if_get(seq, net_dev);
 	if (!primary_if)
 		goto out;
 
@@ -1699,7 +1699,7 @@ int batadv_tt_global_seq_print_text(struct seq_file *seq, void *offset)
 	struct hlist_head *head;
 	u32 i;
 
-	primary_if = batadv_seq_print_text_primary_if_get(seq);
+	primary_if = batadv_seq_print_text_primary_if_get(seq, net_dev);
 	if (!primary_if)
 		goto out;
 

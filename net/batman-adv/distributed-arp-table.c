@@ -809,7 +809,7 @@ int batadv_dat_cache_seq_print_text(struct seq_file *seq, void *offset)
 	int last_seen_msecs, last_seen_secs, last_seen_mins;
 	u32 i;
 
-	primary_if = batadv_seq_print_text_primary_if_get(seq);
+	primary_if = batadv_seq_print_text_primary_if_get(seq, net_dev);
 	if (!primary_if)
 		goto out;
 

@@ -1905,7 +1905,7 @@ int batadv_nc_nodes_seq_print_text(struct seq_file *seq, void *offset)
 	struct batadv_nc_node *nc_node;
 	int i;
 
-	primary_if = batadv_seq_print_text_primary_if_get(seq);
+	primary_if = batadv_seq_print_text_primary_if_get(seq, net_dev);
 	if (!primary_if)
 		goto out;
 

@@ -269,13 +269,14 @@ bool batadv_is_my_mac(struct batadv_priv *bat_priv, const u8 *addr)
  * batadv_seq_print_text_primary_if_get - called from debugfs table printing
  *  function that requires the primary interface
  * @seq: debugfs table seq_file struct
+ * @net_dev: batman-adv net_device
  *
  * Return: primary interface if found or NULL otherwise.
  */
 struct batadv_hard_iface *
-batadv_seq_print_text_primary_if_get(struct seq_file *seq)
+batadv_seq_print_text_primary_if_get(struct seq_file *seq,
+				     struct net_device *net_dev)
 {
-	struct net_device *net_dev = (struct net_device *)seq->private;
 	struct batadv_priv *bat_priv = netdev_priv(net_dev);
 	struct batadv_hard_iface *primary_if;
 

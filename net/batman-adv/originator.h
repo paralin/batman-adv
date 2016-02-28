@@ -29,6 +29,7 @@
 #include <linux/stddef.h>
 #include <linux/types.h>
 
+#include "hard-interface.h"
 #include "hash.h"
 
 struct seq_file;
@@ -71,7 +72,11 @@ batadv_orig_ifinfo_new(struct batadv_orig_node *orig_node,
 		       struct batadv_hard_iface *if_outgoing);
 void batadv_orig_ifinfo_put(struct batadv_orig_ifinfo *orig_ifinfo);
 
-int batadv_orig_seq_print_text(struct seq_file *seq, void *offset);
+void *batadv_orig_seq_start(struct seq_file *seq, loff_t *pos);
+void *batadv_orig_seq_next(struct seq_file *seq, void *v, loff_t *pos);
+int batadv_orig_seq_show(struct seq_file *seq, void *v);
+void batadv_orig_seq_stop(struct seq_file *seq, void *v);
+
 int batadv_orig_hardif_seq_print_text(struct seq_file *seq, void *offset);
 int batadv_orig_hash_add_if(struct batadv_hard_iface *hard_iface,
 			    int max_if_num);

@@ -1297,8 +1297,12 @@ struct batadv_algo_ops {
 	void (*bat_neigh_print)(struct batadv_priv *priv, struct seq_file *seq);
 	void (*bat_neigh_free)(struct batadv_neigh_node *neigh);
 	/* orig_node handling API */
-	void (*bat_orig_print)(struct batadv_priv *priv, struct seq_file *seq,
-			       struct batadv_hard_iface *hard_iface);
+	void (*bat_orig_seq_header)(struct batadv_priv *priv,
+				    struct seq_file *seq);
+	void (*bat_orig_seq_show)(struct batadv_priv *priv,
+				  struct seq_file *seq,
+				  struct batadv_orig_node *orig_node,
+				  struct batadv_hard_iface *if_outgoing);
 	void (*bat_orig_free)(struct batadv_orig_node *orig_node);
 	int (*bat_orig_add_if)(struct batadv_orig_node *orig_node,
 			       int max_if_num);
@@ -1401,6 +1405,26 @@ struct batadv_tvlv_handler {
 enum batadv_tvlv_handler_flags {
 	BATADV_TVLV_HANDLER_OGM_CIFNOTFND = BIT(1),
 	BATADV_TVLV_HANDLER_OGM_CALLED = BIT(2),
+};
+
+/**
+ * struct batadv_seq_private - private data of seq_open
+ * @net_dev: network device the seq private data belongs to
+ */
+struct batadv_seq_private {
+	struct net_device *net_dev;
+};
+
+/**
+ * struct batadv_seq_hash_iter - private data of seq_open for hash iterators
+ * @p: standard batadv_seq_private data
+ * @bucket: current hash bucket
+ * @entry: current hash entry
+ */
+struct batadv_seq_hash_iter {
+	struct batadv_seq_private p;
+	u32 bucket;
+	struct hlist_node *entry;
 };
 
 #endif /* _NET_BATMAN_ADV_TYPES_H_ */
