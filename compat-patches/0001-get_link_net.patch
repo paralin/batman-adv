@@ -1,0 +1,26 @@
+From: Sven Eckelmann <sven@narfation.org>
+Date: Sat, 12 Mar 2016 00:01:45 +0100
+Subject: [PATCH] get_link_net
+---
+ net/batman-adv/hard-interface.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/net/batman-adv/hard-interface.c b/net/batman-adv/hard-interface.c
+index bd98195..f568053 100644
+--- a/net/batman-adv/hard-interface.c
++++ b/net/batman-adv/hard-interface.c
+@@ -97,10 +97,14 @@ static struct net *batadv_getlink_net(const struct net_device *netdev,
+ 	if (!netdev->rtnl_link_ops)
+ 		return fallback_net;
+ 
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)
++	return fallback_net;
++#else
+ 	if (!netdev->rtnl_link_ops->get_link_net)
+ 		return fallback_net;
+ 
+ 	return netdev->rtnl_link_ops->get_link_net(netdev);
++#endif
+ }
+ 
+ /**

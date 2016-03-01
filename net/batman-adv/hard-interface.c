@@ -36,6 +36,8 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
+#include <net/net_namespace.h>
+#include <net/rtnetlink.h>
 
 #include "bridge_loop_avoidance.h"
 #include "debugfs.h"
@@ -83,25 +85,55 @@ out:
 }
 
 /**
+ * batadv_getlink_net - return link net namespace (of use fallback)
+ * @netdev: net_device to check
+ * @fallback_net: return in case get_link_net is not available for @netdev
+ *
+ * Return: result of rtnl_link_ops->get_link_net or @fallback_net
+ */
+static struct net *batadv_getlink_net(const struct net_device *netdev,
+				      struct net *fallback_net)
+{
+	if (!netdev->rtnl_link_ops)
+		return fallback_net;
+
+	if (!netdev->rtnl_link_ops->get_link_net)
+		return fallback_net;
+
+	return netdev->rtnl_link_ops->get_link_net(netdev);
+}
+
+/**
  * batadv_mutual_parents - check if two devices are each others parent
- * @dev1: 1st net_device
- * @dev2: 2nd net_device
+ * @dev1: 1st net dev
+ * @net1: 1st devices netns
+ * @dev2: 2nd net dev
+ * @net2: 2nd devices netns
  *
  * veth devices come in pairs and each is the parent of the other!
  *
  * Return: true if the devices are each others parent, otherwise false
  */
 static bool batadv_mutual_parents(const struct net_device *dev1,
-				  const struct net_device *dev2)
+				  struct net *net1,
+				  const struct net_device *dev2,
+				  struct net *net2)
 {
 	int dev1_parent_iflink = dev_get_iflink(dev1);
 	int dev2_parent_iflink = dev_get_iflink(dev2);
+	const struct net *dev1_parent_net;
+	const struct net *dev2_parent_net;
+
+	dev1_parent_net = batadv_getlink_net(dev1, net1);
+	dev2_parent_net = batadv_getlink_net(dev2, net2);
 
 	if (!dev1_parent_iflink || !dev2_parent_iflink)
 		return false;
 
 	return (dev1_parent_iflink == dev2->ifindex) &&
-	       (dev2_parent_iflink == dev1->ifindex);
+	       (dev2_parent_iflink == dev1->ifindex) &&
+	       net_eq(dev1_parent_net, net2) &&
+	       net_eq(dev2_parent_net, net1);
 }
 
 /**
@@ -119,8 +151,9 @@ static bool batadv_mutual_parents(const struct net_device *dev1,
  */
 static bool batadv_is_on_batman_iface(const struct net_device *net_dev)
 {
-	struct net_device *parent_dev;
 	struct net *net = dev_net(net_dev);
+	struct net_device *parent_dev;
+	struct net *parent_net;
 	bool ret;
 
 	/* check if this is a batman-adv mesh interface */
@@ -132,13 +165,15 @@ static bool batadv_is_on_batman_iface(const struct net_device *net_dev)
 	    dev_get_iflink(net_dev) == net_dev->ifindex)
 		return false;
 
+	parent_net = batadv_getlink_net(net_dev, net);
+
 	/* recurse over the parent device */
-	parent_dev = __dev_get_by_index(net, dev_get_iflink(net_dev));
+	parent_dev = __dev_get_by_index(parent_net, dev_get_iflink(net_dev));
 	/* if we got a NULL parent_dev there is something broken.. */
 	if (WARN(!parent_dev, "Cannot find parent device"))
 		return false;
 
-	if (batadv_mutual_parents(net_dev, parent_dev))
+	if (batadv_mutual_parents(net_dev, net, parent_dev, parent_net))
 		return false;
 
 	ret = batadv_is_on_batman_iface(parent_dev);
