@@ -31,6 +31,7 @@ export CONFIG_BATMAN_ADV_MCAST=y
 export CONFIG_BATMAN_ADV_BATMAN_V=n
 
 PWD:=$(shell pwd)
+BUILD_DIR=$(PWD)/build
 KERNELPATH ?= /lib/modules/$(shell uname -r)/build
 # sanity check: does KERNELPATH exist?
 ifeq ($(shell cd $(KERNELPATH) && pwd),)
@@ -39,6 +40,14 @@ endif
 
 export KERNELPATH
 RM ?= rm -f
+MKDIR := mkdir -p
+PATCH_FLAGS = --batch --fuzz=0 --forward --strip=1 --unified --version-control=never -g0 --remove-empty-files --no-backup-if-mismatch --reject-file=-
+PATCH := patch $(PATCH_FLAGS) -i
+CP := cp -fpR
+
+SOURCE = $(wildcard net/batman-adv/*.[ch]) net/batman-adv/Makefile
+SOURCE_BUILD = $(wildcard $(BUILD_DIR)/net/batman-adv/*.[ch]) $(BUILD_DIR)/net/batman-adv/Makefile
+SOURCE_STAMP = $(BUILD_DIR)/net/batman-adv/.compat-prepared
 
 REVISION= $(shell	if [ -d "$(PWD)/.git" ]; then \
 				echo $$(git --git-dir="$(PWD)/.git" describe --always --dirty --match "v*" |sed 's/^v//' 2> /dev/null || echo "[unknown]"); \
@@ -53,7 +62,7 @@ NOSTDINC_FLAGS += -DBATADV_SOURCE_VERSION=\"$(REVISION)\"
 endif
 
 BUILD_FLAGS := \
-	M=$(PWD)/net/batman-adv \
+	M=$(BUILD_DIR)/net/batman-adv \
 	CONFIG_BATMAN_ADV=m \
 	CONFIG_BATMAN_ADV_DEBUG=$(CONFIG_BATMAN_ADV_DEBUG) \
 	CONFIG_BATMAN_ADV_BLA=$(CONFIG_BATMAN_ADV_BLA) \
@@ -63,18 +72,32 @@ BUILD_FLAGS := \
 	CONFIG_BATMAN_ADV_BATMAN_V=$(CONFIG_BATMAN_ADV_BATMAN_V) \
 	INSTALL_MOD_DIR=updates/net/batman-adv/
 
-all: config
+all: config $(SOURCE_STAMP)
 	$(MAKE) -C $(KERNELPATH) $(BUILD_FLAGS)	modules
 
 clean:
 	$(RM) compat-autoconf.h*
-	$(MAKE) -C $(KERNELPATH) $(BUILD_FLAGS) clean
+	$(RM) -r $(BUILD_DIR)
 
-install: config
+install: config $(SOURCE_STAMP)
 	$(MAKE) -C $(KERNELPATH) $(BUILD_FLAGS) modules_install
 	depmod -a
 
 config:
 	$(PWD)/gen-compat-autoconf.sh $(PWD)/compat-autoconf.h
+
+$(SOURCE_STAMP): $(SOURCE) compat-patches/*
+	$(MKDIR) $(BUILD_DIR)/net/batman-adv/
+	@$(RM) $(SOURCE_BUILD)
+	@$(CP) $(SOURCE) $(BUILD_DIR)/net/batman-adv/
+	@set -e; \
+	patches="$$(ls -1 compat-patches/|grep '.patch$$'|sort)"; \
+	for i in $${patches}; do \
+		echo '  COMPAT_PATCH '$${i};\
+		cd $(BUILD_DIR); \
+		$(PATCH) ../compat-patches/$${i}; \
+		cd - > /dev/null; \
+	done
+	touch $(SOURCE_STAMP)
 
 .PHONY: all clean install config
