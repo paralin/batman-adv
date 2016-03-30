@@ -552,6 +552,7 @@ static void batadv_send_outstanding_bcast_packet(struct work_struct *work)
 	struct sk_buff *skb1;
 	struct net_device *soft_iface;
 	struct batadv_priv *bat_priv;
+	u8 num_bcasts;
 
 	delayed_work = to_delayed_work(work);
 	forw_packet = container_of(delayed_work, struct batadv_forw_packet,
@@ -575,7 +576,12 @@ static void batadv_send_outstanding_bcast_packet(struct work_struct *work)
 		if (hard_iface->soft_iface != soft_iface)
 			continue;
 
-		if (forw_packet->num_packets >= hard_iface->num_bcasts)
+		if (forw_packet->skb->dev == hard_iface->net_dev)
+			num_bcasts = hard_iface->num_bcasts_sameif;
+		else
+			num_bcasts = hard_iface->num_bcasts_otherif;
+
+		if (forw_packet->num_packets >= num_bcasts)
 			continue;
 
 		if (!kref_get_unless_zero(&hard_iface->refcount))

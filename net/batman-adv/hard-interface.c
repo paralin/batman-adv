@@ -679,9 +679,13 @@ batadv_hardif_add_interface(struct net_device *net_dev)
 
 	spin_lock_init(&hard_iface->neigh_list_lock);
 
-	hard_iface->num_bcasts = BATADV_NUM_BCASTS_DEFAULT;
-	if (batadv_is_wifi_netdev(net_dev))
-		hard_iface->num_bcasts = BATADV_NUM_BCASTS_WIRELESS;
+	if (batadv_is_wifi_netdev(net_dev)) {
+		hard_iface->num_bcasts_sameif = BATADV_NUM_BCASTS_WIRELESS;
+		hard_iface->num_bcasts_otherif = BATADV_NUM_BCASTS_WIRELESS;
+	} else {
+		hard_iface->num_bcasts_sameif = BATADV_NUM_BCASTS_SAMEIF;
+		hard_iface->num_bcasts_otherif = BATADV_NUM_BCASTS_OTHERIF;
+	}
 
 	/* extra reference for return */
 	kref_init(&hard_iface->refcount);

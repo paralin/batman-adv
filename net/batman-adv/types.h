@@ -122,7 +122,10 @@ struct batadv_hard_iface_bat_v {
  * @if_num: identificator of the interface
  * @if_status: status of the interface for batman-adv
  * @net_dev: pointer to the net_device
- * @num_bcasts: number of payload re-broadcasts on this interface (ARQ)
+ * @num_bcasts_sameif: number of payload re-broadcasts on this interface (ARQ)
+ *  when the packet was received on this interface
+ * @num_bcasts_otherif: number of payload re-broadcasts on this interface (ARQ)
+ *  when the packet was received on a different interface
  * @hardif_obj: kobject of the per interface sysfs "mesh" directory
  * @refcount: number of contexts the object is used
  * @batman_adv_ptype: packet type describing packets that should be processed by
@@ -141,7 +144,8 @@ struct batadv_hard_iface {
 	s16 if_num;
 	char if_status;
 	struct net_device *net_dev;
-	u8 num_bcasts;
+	u8 num_bcasts_sameif;
+	u8 num_bcasts_otherif;
 	struct kobject *hardif_obj;
 	struct kref refcount;
 	struct packet_type batman_adv_ptype;

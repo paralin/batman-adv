@@ -96,7 +96,8 @@
 #define BATADV_LOG_BUF_LEN 8192	  /* has to be a power of 2 */
 
 /* number of packets to send for broadcasts on different interface types */
-#define BATADV_NUM_BCASTS_DEFAULT 1
+#define BATADV_NUM_BCASTS_SAMEIF 1
+#define BATADV_NUM_BCASTS_OTHERIF 1
 #define BATADV_NUM_BCASTS_WIRELESS 3
 #define BATADV_NUM_BCASTS_MAX 3
 
