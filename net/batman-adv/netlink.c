@@ -242,6 +242,18 @@ static struct genl_ops batadv_netlink_ops[] = {
 		.policy = batadv_netlink_policy,
 		.dumpit = batadv_netlink_dump_hardifs,
 	},
+	{
+		.cmd = BATADV_CMD_GET_TRANSTABLE_LOCAL,
+		.flags = GENL_ADMIN_PERM,
+		.policy = batadv_netlink_policy,
+		.dumpit = batadv_tt_local_dump,
+	},
+	{
+		.cmd = BATADV_CMD_GET_TRANSTABLE_GLOBAL,
+		.flags = GENL_ADMIN_PERM,
+		.policy = batadv_netlink_policy,
+		.dumpit = batadv_tt_global_dump,
+	},
 };
 
 void __init batadv_netlink_register(void)

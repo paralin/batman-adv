@@ -33,6 +33,8 @@ u16 batadv_tt_local_remove(struct batadv_priv *bat_priv,
 			   const char *message, bool roaming);
 int batadv_tt_local_seq_print_text(struct seq_file *seq, void *offset);
 int batadv_tt_global_seq_print_text(struct seq_file *seq, void *offset);
+int batadv_tt_local_dump(struct sk_buff *msg, struct netlink_callback *cb);
+int batadv_tt_global_dump(struct sk_buff *msg, struct netlink_callback *cb);
 void batadv_tt_global_del_orig(struct batadv_priv *bat_priv,
 			       struct batadv_orig_node *orig_node,
 			       s32 match_vid, const char *message);
