@@ -222,6 +222,7 @@ batadv_netlink_dump_hardifs(struct sk_buff *msg, struct netlink_callback *cb)
 
 static struct nla_policy batadv_netlink_policy[BATADV_ATTR_MAX + 1] = {
 	[BATADV_ATTR_MESH_IFINDEX]	= { .type = NLA_U32 },
+	[BATADV_ATTR_HARD_IFINDEX]	= { .type = NLA_U32 },
 };
 
 static struct genl_ops batadv_netlink_ops[] = {
@@ -254,6 +255,18 @@ static struct genl_ops batadv_netlink_ops[] = {
 		.flags = GENL_ADMIN_PERM,
 		.policy = batadv_netlink_policy,
 		.dumpit = batadv_tt_global_dump,
+	},
+	{
+		.cmd = BATADV_CMD_GET_ORIGINATORS,
+		.flags = GENL_ADMIN_PERM,
+		.policy = batadv_netlink_policy,
+		.dumpit = batadv_orig_dump,
+	},
+	{
+		.cmd = BATADV_CMD_GET_NEIGHBORS,
+		.flags = GENL_ADMIN_PERM,
+		.policy = batadv_netlink_policy,
+		.dumpit = batadv_hardif_neigh_dump,
 	},
 };
 
