@@ -33,6 +33,7 @@
 #include <net/sock.h>
 #include <uapi/linux/batman_adv.h>
 
+#include "gateway_client.h"
 #include "originator.h"
 #include "hard-interface.h"
 #include "soft-interface.h"
@@ -269,6 +270,12 @@ static struct genl_ops batadv_netlink_ops[] = {
 		.flags = GENL_ADMIN_PERM,
 		.policy = batadv_netlink_policy,
 		.dumpit = batadv_hardif_neigh_dump,
+	},
+	{
+		.cmd = BATADV_CMD_GET_GATEWAYS,
+		.flags = GENL_ADMIN_PERM,
+		.policy = batadv_netlink_policy,
+		.dumpit = batadv_gw_dump,
 	},
 };
 

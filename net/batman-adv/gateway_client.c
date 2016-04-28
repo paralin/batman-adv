@@ -39,12 +39,15 @@
 #include <linux/spinlock.h>
 #include <linux/stddef.h>
 #include <linux/udp.h>
+#include <uapi/linux/batman_adv.h>
 
 #include "gateway_common.h"
 #include "hard-interface.h"
+#include "netlink.h"
 #include "originator.h"
 #include "packet.h"
 #include "routing.h"
+#include "soft-interface.h"
 #include "sysfs.h"
 #include "translation-table.h"
 
@@ -660,6 +663,129 @@ out:
 	if (primary_if)
 		batadv_hardif_put(primary_if);
 	return 0;
+}
+
+static int
+batadv_gw_dump_entry(struct sk_buff *msg, u32 portid, u32 seq,
+		     struct batadv_priv *bat_priv,
+		     struct batadv_gw_node *gw_node)
+{
+	struct batadv_neigh_ifinfo *router_ifinfo = NULL;
+	struct batadv_neigh_node *router;
+	struct batadv_gw_node *curr_gw;
+	int ret = -EINVAL;
+	void *hdr;
+
+	router = batadv_orig_router_get(gw_node->orig_node, BATADV_IF_DEFAULT);
+	if (!router)
+		goto out;
+
+	router_ifinfo = batadv_neigh_ifinfo_get(router, BATADV_IF_DEFAULT);
+	if (!router_ifinfo)
+		goto out;
+
+	curr_gw = batadv_gw_get_selected_gw_node(bat_priv);
+
+	hdr = genlmsg_put(msg, portid, seq, &batadv_netlink_family,
+			  NLM_F_MULTI, BATADV_CMD_GET_GATEWAYS);
+	if (!hdr) {
+		ret = -ENOBUFS;
+		goto out;
+	}
+
+	ret = -EMSGSIZE;
+
+	if (curr_gw == gw_node)
+		if (nla_put_flag(msg, BATADV_ATTR_FLAG_BEST)) {
+			genlmsg_cancel(msg, hdr);
+			goto out;
+		}
+
+	if (nla_put(msg, BATADV_ATTR_ORIG_ADDRESS, ETH_ALEN,
+		    gw_node->orig_node->orig) ||
+	    nla_put_u8(msg, BATADV_ATTR_TQ, router_ifinfo->bat_iv.tq_avg) ||
+	    nla_put(msg, BATADV_ATTR_ROUTER, ETH_ALEN,
+		    router->addr) ||
+	    nla_put_string(msg, BATADV_ATTR_HARD_IFNAME,
+			   router->if_incoming->net_dev->name) ||
+	    nla_put_u32(msg, BATADV_ATTR_BANDWIDTH_DOWN,
+			gw_node->bandwidth_down) ||
+	    nla_put_u32(msg, BATADV_ATTR_BANDWIDTH_UP,
+			gw_node->bandwidth_up)) {
+		genlmsg_cancel(msg, hdr);
+		goto out;
+	}
+
+	genlmsg_end(msg, hdr);
+	ret = 0;
+
+out:
+	if (router_ifinfo)
+		batadv_neigh_ifinfo_put(router_ifinfo);
+	if (router)
+		batadv_neigh_node_put(router);
+	return ret;
+}
+
+int batadv_gw_dump(struct sk_buff *msg, struct netlink_callback *cb)
+{
+	struct batadv_hard_iface *primary_if = NULL;
+	struct net *net = sock_net(cb->skb->sk);
+	int portid = NETLINK_CB(cb->skb).portid;
+	struct net_device *soft_iface = NULL;
+	struct batadv_gw_node *gw_node;
+	struct batadv_priv *bat_priv;
+	int idx_skip = cb->args[0];
+	int ifindex;
+	int idx = 0;
+	int ret;
+
+	ifindex = batadv_netlink_get_ifindex(cb->nlh,
+					     BATADV_ATTR_MESH_IFINDEX);
+	if (!ifindex)
+		return -EINVAL;
+
+	soft_iface = dev_get_by_index(net, ifindex);
+	if (!soft_iface || !batadv_softif_is_valid(soft_iface)) {
+		ret = -ENODEV;
+		goto out;
+	}
+
+	bat_priv = netdev_priv(soft_iface);
+
+	primary_if = batadv_primary_if_get_selected(bat_priv);
+	if (!primary_if || primary_if->if_status != BATADV_IF_ACTIVE) {
+		ret = -ENOENT;
+		goto out;
+	}
+
+	rcu_read_lock();
+	hlist_for_each_entry_rcu(gw_node, &bat_priv->gw.list, list) {
+		if (idx++ < idx_skip)
+			continue;
+
+		if (batadv_gw_dump_entry(msg, portid, cb->nlh->nlmsg_seq,
+					 bat_priv, gw_node)) {
+			idx_skip = idx - 1;
+			ret = msg->len;
+			goto unlock;
+		}
+	}
+
+	idx_skip = idx;
+	ret = msg->len;
+unlock:
+	rcu_read_unlock();
+
+out:
+	if (primary_if)
+		batadv_hardif_put(primary_if);
+	if (soft_iface)
+		dev_put(soft_iface);
+
+	cb->args[0] = idx_skip;
+
+	return ret;
 }
 
 /**
