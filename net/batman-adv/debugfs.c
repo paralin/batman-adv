@@ -78,7 +78,7 @@ static void batadv_emit_log_char(struct batadv_priv_debug_log *debug_log,
 		debug_log->log_start = debug_log->log_end - batadv_log_buff_len;
 }
 
-_printf(2, 3)
+__printf(2, 3)
 static int batadv_fdebug_log(struct batadv_priv_debug_log *debug_log,
 			     const char *fmt, ...)
 {
