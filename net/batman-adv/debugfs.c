@@ -42,6 +42,7 @@
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/wait.h>
+#include <net/net_namespace.h>
 #include <stdarg.h>
 
 #include "bridge_loop_avoidance.h"
