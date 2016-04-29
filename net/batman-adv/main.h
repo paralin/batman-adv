@@ -191,6 +191,7 @@ enum batadv_uev_type {
 #include "types.h"
 
 struct batadv_ogm_packet;
+struct netlink_callback;
 struct seq_file;
 struct sk_buff;
 

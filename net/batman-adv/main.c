@@ -35,6 +35,7 @@
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/netdevice.h>
+#include <linux/netlink.h>
 #include <linux/pkt_sched.h>
 #include <linux/rculist.h>
 #include <linux/rcupdate.h>
@@ -46,6 +47,8 @@
 #include <linux/string.h>
 #include <linux/workqueue.h>
 #include <net/dsfield.h>
+#include <net/genetlink.h>
+#include <net/netlink.h>
 #include <net/rtnetlink.h>
 #include <uapi/linux/batman_adv.h>
 

@@ -18,7 +18,12 @@
 #ifndef _NET_BATMAN_ADV_NETLINK_H_
 #define _NET_BATMAN_ADV_NETLINK_H_
 
+#include <linux/compiler.h>
+#include <linux/genetlink.h>
 #include <net/genetlink.h>
+#include <net/netlink.h>
+
+struct nlmsghdr;
 
 void batadv_netlink_register(void);
 void batadv_netlink_unregister(void);

@@ -18,14 +18,23 @@
 #include "main.h"
 #include "netlink.h"
 
+#include <linux/errno.h>
+#include <linux/fs.h>
+#include <linux/if_ether.h>
+#include <linux/init.h>
 #include <linux/netdevice.h>
+#include <linux/netlink.h>
+#include <linux/printk.h>
+#include <linux/rculist.h>
+#include <linux/rcupdate.h>
+#include <linux/skbuff.h>
+#include <linux/stddef.h>
+#include <linux/types.h>
 #include <net/sock.h>
 #include <uapi/linux/batman_adv.h>
 
 #include "hard-interface.h"
-#include "originator.h"
 #include "soft-interface.h"
-#include "translation-table.h"
 
 struct genl_family batadv_netlink_family = {
 	.id = GENL_ID_GENERATE,
