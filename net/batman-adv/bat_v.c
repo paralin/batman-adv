@@ -21,14 +21,19 @@
 #include <linux/atomic.h>
 #include <linux/bug.h>
 #include <linux/cache.h>
+#include <linux/errno.h>
+#include <linux/if_ether.h>
 #include <linux/init.h>
 #include <linux/jiffies.h>
 #include <linux/netdevice.h>
+#include <linux/netlink.h>
 #include <linux/rculist.h>
 #include <linux/rcupdate.h>
 #include <linux/seq_file.h>
 #include <linux/types.h>
 #include <linux/workqueue.h>
+#include <net/genetlink.h>
+#include <net/netlink.h>
 #include <uapi/linux/batman_adv.h>
 
 #include "bat_v_elp.h"
@@ -38,6 +43,8 @@
 #include "netlink.h"
 #include "originator.h"
 #include "packet.h"
+
+struct sk_buff;
 
 static void batadv_v_iface_activate(struct batadv_hard_iface *hard_iface)
 {
