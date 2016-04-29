@@ -35,15 +35,18 @@
 #include <linux/list.h>
 #include <linux/lockdep.h>
 #include <linux/netdevice.h>
+#include <linux/netlink.h>
 #include <linux/rculist.h>
 #include <linux/rcupdate.h>
 #include <linux/seq_file.h>
+#include <linux/skbuff.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/stddef.h>
 #include <linux/string.h>
 #include <linux/workqueue.h>
-#include <net/net_namespace.h>
+#include <net/genetlink.h>
+#include <net/netlink.h>
 #include <net/sock.h>
 #include <uapi/linux/batman_adv.h>
 

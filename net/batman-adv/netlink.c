@@ -35,6 +35,7 @@
 
 #include "hard-interface.h"
 #include "soft-interface.h"
+#include "translation-table.h"
 
 struct genl_family batadv_netlink_family = {
 	.id = GENL_ID_GENERATE,
