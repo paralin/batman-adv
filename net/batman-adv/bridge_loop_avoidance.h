@@ -23,6 +23,7 @@
 #include <linux/types.h>
 
 struct net_device;
+struct netlink_callback;
 struct seq_file;
 struct sk_buff;
 
