@@ -33,6 +33,7 @@
 #include <net/sock.h>
 #include <uapi/linux/batman_adv.h>
 
+#include "originator.h"
 #include "hard-interface.h"
 #include "soft-interface.h"
 #include "translation-table.h"

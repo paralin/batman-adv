@@ -31,7 +31,9 @@
 
 #include "hash.h"
 
+struct netlink_callback;
 struct seq_file;
+struct sk_buff;
 
 bool batadv_compare_orig(const struct hlist_node *node, const void *data2);
 int batadv_originator_init(struct batadv_priv *bat_priv);
