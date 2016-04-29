@@ -21,6 +21,7 @@
 #include <linux/atomic.h>
 #include <linux/byteorder/generic.h>
 #include <linux/etherdevice.h>
+#include <linux/errno.h>
 #include <linux/fs.h>
 #include <linux/if_ether.h>
 #include <linux/if_vlan.h>
@@ -31,6 +32,7 @@
 #include <linux/kref.h>
 #include <linux/list.h>
 #include <linux/netdevice.h>
+#include <linux/netlink.h>
 #include <linux/rculist.h>
 #include <linux/rcupdate.h>
 #include <linux/seq_file.h>
@@ -39,6 +41,9 @@
 #include <linux/spinlock.h>
 #include <linux/stddef.h>
 #include <linux/udp.h>
+#include <net/genetlink.h>
+#include <net/netlink.h>
+#include <net/sock.h>
 #include <uapi/linux/batman_adv.h>
 
 #include "gateway_common.h"
